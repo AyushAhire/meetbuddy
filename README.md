@@ -162,18 +162,6 @@ All LLM calls are routed through `apps/api/services/llm.py` — a single place t
 
 ---
 
-## Contributing
-
-1. Fork the repo and create a feature branch
-2. Run `./scripts/setup.sh` to get the local stack up
-3. Follow the conventions in each app's `README.md`
-4. Never write raw SQL — use SQLAlchemy ORM
-5. Never hand-write Alembic migrations — use `alembic revision --autogenerate`
-6. All LLM calls go through `services/llm.py`, not inline in route handlers
-7. Open a PR with a clear description of what changed and why
-
----
-
 ## License
 
 [Apache 2.0](LICENSE)
