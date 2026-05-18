@@ -138,29 +138,6 @@ Set `LLM_PROVIDER` in `.env`:
 
 All LLM calls are routed through `apps/api/services/llm.py` — a single place to add new providers.
 
----
-
-## Phase 1 — complete
-
-- [x] Docker Compose stack boots with one command
-- [x] User auth (register, login, JWT)
-- [x] Extension captures Google Meet audio via WebSocket
-- [x] Transcription pipeline (faster-whisper)
-- [x] Post-meeting: summary + action items via LLM
-- [x] Web dashboard: list meetings, view insights
-- [x] Semantic search across all meetings
-
-## Phase 2 — roadmap
-
-- [ ] Speaker diarization (who said what)
-- [ ] Calendar integration (auto-name meetings from invite)
-- [ ] Slack / email digest of action items
-- [ ] Firefox extension support
-- [ ] Zoom and Microsoft Teams audio capture
-- [ ] Self-hosted Docker image with one-click deploy
-- [ ] Mobile companion app (read-only)
-
----
 
 ## License
 
