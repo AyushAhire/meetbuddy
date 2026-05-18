@@ -1,0 +1,16 @@
+version: "3.9"
+
+# Overlay for local dev — only infra services, run api/web locally
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"

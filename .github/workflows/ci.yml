@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  api-test:
+    name: API tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: meetbuddy
+          POSTGRES_PASSWORD: meetbuddy
+          POSTGRES_DB: meetbuddy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        working-directory: apps/api
+        run: uv sync
+      - name: Run tests
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql+asyncpg://meetbuddy:meetbuddy@localhost:5432/meetbuddy
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: test-secret
+          STORAGE_ENDPOINT: http://localhost:9000
+          STORAGE_ACCESS_KEY: test
+          STORAGE_SECRET_KEY: test
+          STORAGE_BUCKET: test
+          LLM_PROVIDER: ollama
+        run: uv run pytest -x
+
+  web-typecheck:
+    name: Web typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web typecheck

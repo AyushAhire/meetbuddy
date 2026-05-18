@@ -1,0 +1,16 @@
+{
+  "name": "meetbuddy",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/extension",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:extension": "pnpm --filter extension dev",
+    "build": "pnpm --filter web build",
+    "typecheck": "pnpm --filter web typecheck && pnpm --filter extension typecheck"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

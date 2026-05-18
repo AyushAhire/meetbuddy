@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MeetBuddy — How Everything Works</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3250;
+    --accent: #7c6af7;
+    --accent2: #5eead4;
+    --text: #e2e4f0;
+    --muted: #8b90b8;
+    --code-bg: #12141e;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --red: #f87171;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar TOC ── */
+  #toc {
+    width: 260px;
+    min-width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 28px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  #toc .toc-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 20px 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  #toc a {
+    display: block;
+    padding: 5px 20px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+
+  #toc a:hover {
+    color: var(--text);
+    border-left-color: var(--accent);
+    background: rgba(124,106,247,0.07);
+  }
+
+  #toc a.sub {
+    padding-left: 32px;
+    font-size: 12px;
+  }
+
+  /* ── Main Content ── */
+  main {
+    flex: 1;
+    max-width: 860px;
+    padding: 52px 56px;
+    overflow-x: hidden;
+  }
+
+  /* ── Headings ── */
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 1rem;
+    margin-bottom: 48px;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--accent2);
+    margin-top: 52px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h2 .num {
+    font-size: 11px;
+    background: var(--surface2);
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 28px;
+    margin-bottom: 10px;
+  }
+
+  h4 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-top: 20px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Paragraphs & Lists ── */
+  p { margin-bottom: 14px; }
+
+  ul, ol {
+    margin: 12px 0 16px 20px;
+  }
+
+  li { margin-bottom: 6px; }
+
+  li::marker { color: var(--accent); }
+
+  strong { color: #fff; font-weight: 600; }
+
+  /* ── Code ── */
+  code {
+    background: var(--code-bg);
+    color: var(--accent2);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.82em;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    overflow-x: auto;
+    margin: 18px 0;
+    position: relative;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    color: #c9d1d9;
+    font-size: 0.84em;
+    padding: 0;
+  }
+
+  /* token colours */
+  .kw  { color: #f97583; }  /* keywords */
+  .fn  { color: #b392f0; }  /* functions */
+  .st  { color: #9ecbff; }  /* strings */
+  .cm  { color: #6a737d; font-style: italic; } /* comments */
+  .ty  { color: #85e89d; }  /* types */
+  .nu  { color: #79b8ff; }  /* numbers */
+
+  /* ── Tables ── */
+  .table-wrap { overflow-x: auto; margin: 18px 0; border-radius: 10px; border: 1px solid var(--border); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+  }
+
+  thead tr {
+    background: var(--surface2);
+  }
+
+  thead th {
+    text-align: left;
+    padding: 10px 16px;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.8em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+  tbody td {
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  tbody td:first-child code { color: var(--accent); }
+
+  /* ── Flow diagram ── */
+  .flow {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8em;
+    line-height: 1.9;
+    color: #c9d1d9;
+    margin: 18px 0;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(124,106,247,0.06);
+    padding: 14px 18px;
+    border-radius: 0 8px 8px 0;
+    margin: 18px 0;
+    font-size: 0.9em;
+  }
+
+  .callout.info { border-left-color: var(--accent2); background: rgba(94,234,212,0.05); }
+  .callout.warn { border-left-color: var(--yellow); background: rgba(251,191,36,0.05); }
+
+  .callout strong { display: block; margin-bottom: 4px; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+  .callout.info strong { color: var(--accent2); }
+  .callout.warn strong { color: var(--yellow); }
+
+  /* ── Pipeline steps ── */
+  .steps { margin: 18px 0; }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+  }
+
+  .step-num {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.8em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+
+  .step-body { flex: 1; }
+  .step-body strong { color: var(--accent2); }
+
+  /* ── Badge ── */
+  .badge {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .badge-purple { background: rgba(124,106,247,0.2); color: var(--accent); }
+  .badge-teal   { background: rgba(94,234,212,0.15); color: var(--accent2); }
+  .badge-green  { background: rgba(74,222,128,0.15); color: var(--green); }
+
+  /* ── Divider ── */
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+
+  /* ── End-to-end flow numbered ── */
+  .e2e { counter-reset: e2e; }
+  .e2e-step {
+    position: relative;
+    padding: 16px 16px 16px 56px;
+    margin-bottom: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .e2e-step::before {
+    counter-increment: e2e;
+    content: counter(e2e);
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.75em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 24px;
+  }
+  .e2e-step h4 { margin-top: 0; font-size: 0.85rem; }
+  .e2e-step ul { margin-top: 6px; }
+
+  @media print {
+    #toc { display: none; }
+    main { padding: 24px 36px; max-width: 100%; }
+    pre { break-inside: avoid; }
+    h2 { break-before: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── TOC sidebar ── -->
+<nav id="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#what">What This App Does</a>
+  <a href="#arch">Architecture Overview</a>
+  <a href="#infra">Infrastructure</a>
+  <a href="#backend">Backend</a>
+  <a class="sub" href="#config">Config</a>
+  <a class="sub" href="#database">Database Setup</a>
+  <a class="sub" href="#models">Data Models</a>
+  <a class="sub" href="#migration">Migration</a>
+  <a class="sub" href="#entrypoint">API Entry Point</a>
+  <a href="#auth">Authentication</a>
+  <a href="#meetings">Meetings CRUD</a>
+  <a href="#upload">Audio Upload</a>
+  <a href="#websocket">WebSocket</a>
+  <a href="#pipeline">Processing Pipeline</a>
+  <a href="#transcription">Transcription Service</a>
+  <a href="#llm">LLM Service</a>
+  <a href="#prompts">LLM Prompts</a>
+  <a href="#search">Semantic Search</a>
+  <a href="#storage">Object Storage</a>
+  <a href="#extension">Chrome Extension</a>
+  <a class="sub" href="#bg">background.ts</a>
+  <a class="sub" href="#content">content.ts</a>
+  <a class="sub" href="#popup">popup</a>
+  <a class="sub" href="#sidepanel">sidepanel</a>
+  <a href="#webapp">Next.js Web App</a>
+  <a href="#e2e">End-to-End Flow</a>
+  <a href="#tech">Tech Stack</a>
+  <a href="#patterns">Key Patterns</a>
+</nav>
+
+<!-- ── Main content ── -->
+<main>
+
+  <h1>MeetBuddy</h1>
+  <p class="subtitle">A complete walkthrough of the codebase — written to help you learn the full system from scratch.</p>
+
+  <!-- ─────────────────────────────── WHAT ─────────────────────────────── -->
+  <h2 id="what">What This App Does</h2>
+  <p>MeetBuddy automatically <strong>records your Google Meet calls</strong>, <strong>transcribes the audio</strong>, <strong>extracts insights</strong> (summary, action items, decisions), and lets you <strong>search across all your past meetings</strong> using plain English questions.</p>
+
+  <p><strong>Three moving parts:</strong></p>
+  <ul>
+    <li><span class="badge badge-purple">Chrome Extension</span> — captures audio during a live meeting</li>
+    <li><span class="badge badge-teal">FastAPI Backend</span> — processes audio and stores everything</li>
+    <li><span class="badge badge-green">Next.js Web App</span> — shows results and lets you query them</li>
+  </ul>
+
+  <!-- ─────────────────────────────── ARCH ─────────────────────────────── -->
+  <h2 id="arch">System Architecture Overview</h2>
+<div class="flow">Chrome Extension (background.ts)
+  │  detects Google Meet tab
+  │  captures tab audio via MediaRecorder
+  │  streams chunks via WebSocket every 5 seconds
+  ▼
+FastAPI API (main.py)  ←→  PostgreSQL (with pgvector)
+  │  receives audio chunks                ↑
+  │  stores audio in MinIO             models
+  │  triggers Celery pipeline              │
+  ▼                                        │
+Celery Worker (tasks/pipeline.py)  ────────┘
+  │  transcribes audio (Whisper)
+  │  embeds transcript chunks (sentence-transformers)
+  │  extracts insights (LLM)
+  │  marks meeting "done"
+  ▼
+MinIO (S3-compatible object storage)
+  stores: raw audio files, transcript JSON files
+
+Next.js Web App
+  reads from FastAPI to show meetings, transcripts, insights
+  query page: sends a question → API does vector search → LLM answers</div>
+
+  <!-- ─────────────────────────────── INFRA ─────────────────────────────── -->
+  <h2 id="infra">The Infrastructure <span class="num">docker-compose.yml</span></h2>
+  <p>Five services run together:</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Service</th><th>Image</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>postgres</code></td><td>pgvector/pgvector:pg16</td><td>Database — the <code>pgvector</code> image adds a vector similarity extension</td></tr>
+      <tr><td><code>redis</code></td><td>redis:7-alpine</td><td>Message broker for Celery task queue</td></tr>
+      <tr><td><code>minio</code></td><td>minio/minio</td><td>S3-compatible object storage (audio + transcript files)</td></tr>
+      <tr><td><code>api</code></td><td>Custom Dockerfile</td><td>Runs the FastAPI server (uvicorn)</td></tr>
+      <tr><td><code>worker</code></td><td>Same Dockerfile</td><td>Runs Celery worker — same image, different startup command</td></tr>
+      <tr><td><code>web</code></td><td>Custom Dockerfile</td><td>Runs the Next.js app</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>Key insight</strong>
+    The <code>worker</code> service uses the exact same Docker image as <code>api</code> but starts with <code>celery -A tasks.celery_app worker</code> instead of uvicorn. One codebase, two processes — a very common pattern.
+  </div>
+
+  <!-- ─────────────────────────────── BACKEND ─────────────────────────────── -->
+  <h2 id="backend">Backend Deep Dive <span class="num">apps/api/</span></h2>
+
+  <h3 id="config">Configuration — <code>config.py</code></h3>
+  <p>Uses <code>pydantic-settings</code> to read environment variables. Every config value is one attribute on the <code>Settings</code> class. Values come from a <code>.env</code> file at project root.</p>
+  <p>Key settings:</p>
+  <ul>
+    <li><code>database_url</code> — PostgreSQL connection string (uses <code>asyncpg</code> driver for async support)</li>
+    <li><code>redis_url</code> — Redis for Celery</li>
+    <li><code>storage_*</code> — MinIO credentials and endpoint</li>
+    <li><code>jwt_secret</code> — used to sign/verify JWT tokens</li>
+    <li><code>llm_provider</code> — switches between <code>ollama</code> (local), <code>openai</code>, or <code>anthropic</code></li>
+    <li><code>whisper_model</code> — size of the Whisper speech-to-text model (<code>base</code>, <code>small</code>, <code>medium</code>…)</li>
+  </ul>
+
+  <h3 id="database">Database Setup — <code>database.py</code></h3>
+<pre><code><span class="fn">engine</span> = create_async_engine(settings.database_url, echo=<span class="kw">False</span>)
+<span class="fn">AsyncSessionFactory</span> = async_sessionmaker(engine, expire_on_commit=<span class="kw">False</span>)
+</code></pre>
+  <p>This creates an <strong>async</strong> SQLAlchemy engine. Async means database calls don't block the server while waiting for a result — FastAPI can handle other requests at the same time.</p>
+  <p><code>get_db()</code> is a FastAPI dependency that <em>yields</em> a session, commits on success, and rolls back on any exception. Routes receive this session via <code>Depends(get_db)</code>.</p>
+
+  <h3 id="models">Data Models — <code>models/</code></h3>
+
+  <h4>User</h4>
+  <p>Stores email, name, avatar URL, and a bcrypt-hashed password. ID is a UUID.</p>
+
+  <h4>Meeting</h4>
+  <p>The core entity. Tracks:</p>
+  <ul>
+    <li>Which user it belongs to (<code>user_id</code> foreign key)</li>
+    <li>Which platform (<code>google_meet</code>, etc.)</li>
+    <li>Status lifecycle: <code>"recording"</code> → <code>"processing"</code> → <code>"done"</code></li>
+    <li>Where the audio file lives in MinIO (<code>audio_url</code> = a storage key like <code>audio/&lt;uuid&gt;/recording.webm</code>)</li>
+    <li>Where the transcript JSON lives (<code>transcript_url</code> = MinIO key)</li>
+    <li>Related data via SQLAlchemy relationships: <code>speakers</code>, <code>chunks</code>, <code>insights</code></li>
+  </ul>
+
+  <h4>Speaker</h4>
+  <p>Represents one speaker identified in the recording. Has a <code>label</code> (like <code>"SPEAKER_0"</code>) and an optional <code>name</code>. Speaker diarization is a Phase 2 feature — not fully wired yet.</p>
+
+  <h4>Chunk</h4>
+  <p>A segment of the transcript. Stores the text, start/end timestamps, and — critically — a <strong>768-dimension embedding vector</strong>. This is what enables semantic search. The <code>embedding</code> column uses <code>pgvector.sqlalchemy.Vector(768)</code>.</p>
+
+  <h4>MeetingInsights</h4>
+  <p>One row per meeting (1:1 relationship). Stores <code>summary</code>, <code>action_items</code>, <code>decisions</code>, <code>topics</code> as JSONB arrays, plus the raw LLM output.</p>
+
+  <h4>MemoryEntity</h4>
+  <p>Stores named entities (people, companies, projects) extracted from meetings for cross-meeting memory. Not yet connected to the main pipeline.</p>
+
+  <h3 id="migration">Database Migration — <code>alembic/versions/0001_initial_schema.py</code></h3>
+  <p>Alembic manages schema changes. The first migration:</p>
+  <ol>
+    <li>Creates the <code>vector</code> PostgreSQL extension (required by pgvector)</li>
+    <li>Creates all tables in dependency order (users → meetings → speakers → chunks → meeting_insights → memory_entities)</li>
+    <li>Creates an <strong>IVFFlat index</strong> on <code>chunks.embedding</code> — this makes vector similarity searches fast at scale</li>
+  </ol>
+  <p>The <code>downgrade()</code> function drops everything in reverse order. Always write downgrade — it lets you undo a migration.</p>
+
+  <h3 id="entrypoint">API Entry Point — <code>main.py</code></h3>
+<pre><code>app = FastAPI(title=<span class="st">"MeetBuddy API"</span>, version=<span class="st">"0.1.0"</span>)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[<span class="st">"http://localhost:3000"</span>, <span class="st">"chrome-extension://*"</span>],
+    allow_credentials=<span class="kw">True</span>,
+    ...
+)
+</code></pre>
+  <p>CORS middleware allows the web app (<code>localhost:3000</code>) and the Chrome extension (<code>chrome-extension://…</code>) to make API requests. Without this, browsers block the requests. All routes are mounted under <code>/api/v1</code>. There's also a <code>/health</code> endpoint for Docker healthchecks.</p>
+
+  <!-- ─────────────────────────────── AUTH ─────────────────────────────── -->
+  <h2 id="auth">Authentication</h2>
+  <p><strong>JWT-based auth with access + refresh tokens.</strong></p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Endpoint</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /auth/register</code></td><td>Creates user, hashes password with bcrypt, returns both tokens</td></tr>
+      <tr><td><code>POST /auth/login</code></td><td>Looks up user, verifies bcrypt hash, returns tokens</td></tr>
+      <tr><td><code>POST /auth/refresh</code></td><td>Verifies refresh token, issues a new pair</td></tr>
+      <tr><td><code>DELETE /auth/logout</code></td><td>Stateless — client drops its token. A blocklist would go here.</td></tr>
+      <tr><td><code>GET /auth/me</code></td><td>Returns current user's profile</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>JWT structure</h3>
+  <p>Every token payload has three fields:</p>
+  <ul>
+    <li><code>sub</code> — the user's UUID (the "subject")</li>
+    <li><code>type</code> — either <code>"access"</code> or <code>"refresh"</code> (prevents using a refresh token as an access token)</li>
+    <li><code>exp</code> — expiry timestamp</li>
+  </ul>
+  <p>Access tokens expire in <strong>60 minutes</strong>. Refresh tokens expire in <strong>30 days</strong>. <code>passlib</code> with bcrypt handles password hashing. <code>python-jose</code> handles JWT encoding/decoding.</p>
+
+  <h3>How auth guards work</h3>
+  <p>Any route that needs authentication has this dependency:</p>
+<pre><code><span class="kw">async def</span> <span class="fn">get_one</span>(
+    id: <span class="ty">uuid.UUID</span>,
+    current_user: <span class="ty">User</span> = Depends(get_current_user),
+    db: <span class="ty">AsyncSession</span> = Depends(get_db),
+):
+</code></pre>
+  <p><code>get_current_user</code> reads the <code>Authorization: Bearer &lt;token&gt;</code> header, decodes the JWT, looks up the user in the database, and returns the User object. If anything fails, it raises a 401. All protected routes then automatically receive the User object — FastAPI calls these "dependency injection" and it's one of the framework's best features.</p>
+
+  <!-- ─────────────────────────────── MEETINGS ─────────────────────────────── -->
+  <h2 id="meetings">Meetings CRUD</h2>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET</code></td><td><code>/meetings</code></td><td>List your meetings (filterable by status, paginated)</td></tr>
+      <tr><td><code>POST</code></td><td><code>/meetings</code></td><td>Create a new meeting record</td></tr>
+      <tr><td><code>GET</code></td><td><code>/meetings/{id}</code></td><td>Get one meeting (with insights eagerly loaded)</td></tr>
+      <tr><td><code>PATCH</code></td><td><code>/meetings/{id}</code></td><td>Update title, status, end time</td></tr>
+      <tr><td><code>DELETE</code></td><td><code>/meetings/{id}</code></td><td>Delete meeting (cascades to chunks, insights)</td></tr>
+      <tr><td><code>GET</code></td><td><code>/meetings/{id}/transcript</code></td><td>Get all chunks with timestamps and speaker names</td></tr>
+      <tr><td><code>GET</code></td><td><code>/meetings/{id}/audio</code></td><td>Get a signed URL to play the audio file</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout info">
+    <strong>Ownership check</strong>
+    Every query in <code>services/meeting.py</code> filters by <code>Meeting.user_id == user_id</code> — you can only ever see your own meetings. <code>selectinload(Meeting.insights)</code> tells SQLAlchemy to load the related <code>MeetingInsights</code> row in a second SQL query, avoiding the N+1 problem.
+  </div>
+
+  <!-- ─────────────────────────────── UPLOAD ─────────────────────────────── -->
+  <h2 id="upload">Audio Upload — <code>routes/upload.py</code></h2>
+  <p>Two endpoints for when the extension uploads a completed file (alternative to streaming):</p>
+  <ul>
+    <li><strong><code>POST /upload/audio</code></strong> — accepts a file upload, verifies ownership, uploads bytes to MinIO at key <code>audio/&lt;meeting_id&gt;/&lt;filename&gt;</code>, saves the key to <code>meeting.audio_url</code></li>
+    <li><strong><code>POST /upload/complete</code></strong> — signals upload is done, sets status to <code>"processing"</code>, kicks off the Celery pipeline</li>
+  </ul>
+
+  <!-- ─────────────────────────────── WEBSOCKET ─────────────────────────────── -->
+  <h2 id="websocket">WebSocket Streaming — <code>routes/websocket.py</code></h2>
+  <p><code>WS /api/v1/ws/{meeting_id}</code> — used by the extension during a live meeting.</p>
+  <p>The server keeps an in-memory dict <code>AUDIO_CHUNK_STORE</code> mapping <code>meeting_id → list[bytes]</code>.</p>
+
+  <h3>Protocol</h3>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body">Client sends <code>{"type": "chunk", "audio_b64": "...", "seq": 0}</code> every 5 seconds</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">Server decodes the base64 audio and appends to the in-memory list</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">Client sends <code>{"type": "stop"}</code> when the meeting ends</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body">Server concatenates all chunks, uploads to MinIO, triggers the pipeline</div></div>
+  </div>
+
+  <div class="callout warn">
+    <strong>Known limitation</strong>
+    <code>AUDIO_CHUNK_STORE</code> lives in process memory. In a multi-process deployment, chunks are lost if requests hit different workers. A real fix uses Redis or shared storage for the chunks.
+  </div>
+
+  <!-- ─────────────────────────────── PIPELINE ─────────────────────────────── -->
+  <h2 id="pipeline">The Processing Pipeline — <code>tasks/pipeline.py</code></h2>
+  <p>Celery is a task queue — it lets you run code asynchronously in a separate worker process. This is essential because transcription and LLM calls can take minutes; you don't want them blocking an HTTP request.</p>
+
+  <h3>Setup — <code>tasks/celery_app.py</code></h3>
+<pre><code>celery_app = Celery(
+    <span class="st">"meetbuddy"</span>,
+    broker=settings.redis_url,   <span class="cm"># Redis receives the task message</span>
+    backend=settings.redis_url,  <span class="cm"># Redis stores the result</span>
+    include=[<span class="st">"tasks.pipeline"</span>],
+)
+</code></pre>
+
+  <h3>The Pipeline Chain</h3>
+<pre><code><span class="kw">def</span> <span class="fn">process_meeting</span>(meeting_id: <span class="ty">str</span>) -> <span class="kw">None</span>:
+    pipeline = chain(
+        transcribe_audio.si(meeting_id),       <span class="cm"># Step 1</span>
+        store_and_embed_chunks.si(meeting_id), <span class="cm"># Step 2</span>
+        extract_insights_task.si(meeting_id),  <span class="cm"># Step 3</span>
+        mark_complete.si(meeting_id),          <span class="cm"># Step 4</span>
+    )
+    pipeline.delay()
+</code></pre>
+  <p><code>chain()</code> runs tasks in sequence — step 2 only starts after step 1 completes. <code>.si()</code> means "ignore the return value of the previous task". <code>.delay()</code> sends the chain to Redis so the Celery worker picks it up.</p>
+
+  <h3>Async/Sync Bridge</h3>
+  <p>Celery tasks are synchronous but the database layer is async. The bridge:</p>
+<pre><code><span class="kw">def</span> <span class="fn">_run</span>(coro):
+    <span class="kw">return</span> asyncio.get_event_loop().run_until_complete(coro)
+
+<span class="cm"># Inside every Celery task:</span>
+<span class="kw">async def</span> <span class="fn">_run_async</span>():
+    <span class="kw">async with</span> AsyncSessionFactory() <span class="kw">as</span> db:
+        ...  <span class="cm"># actual async work</span>
+
+_run(_run_async())
+</code></pre>
+
+  <h3>Four Steps in Detail</h3>
+
+  <h4>Step 1 — transcribe_audio</h4>
+  <p>Loads the meeting, sets status to <code>"processing"</code>, downloads audio from MinIO, writes to a temp file, runs faster-whisper (beam_size=5), uploads transcript JSON back to MinIO, saves the key.</p>
+
+  <h4>Step 2 — store_and_embed_chunks</h4>
+  <p>Downloads transcript JSON, extracts all segment texts, runs them through the embedding model to produce 768-dim vectors, creates a <code>Chunk</code> row for each segment with its vector. This is what enables semantic search.</p>
+
+  <h4>Step 3 — extract_insights_task</h4>
+  <p>Downloads transcript JSON, concatenates all text, calls the LLM with the extraction prompt, saves a <code>MeetingInsights</code> row.</p>
+
+  <h4>Step 4 — mark_complete</h4>
+  <p>Sets <code>meeting.status = "done"</code>.</p>
+
+  <div class="callout">
+    <strong>Retry logic</strong>
+    All tasks have <code>max_retries=3</code> and <code>bind=True</code> (so they can call <code>self.retry()</code>). If a step fails, it retries after 30 seconds. This makes the pipeline resilient to transient failures like network blips or model load errors.
+  </div>
+
+  <!-- ─────────────────────────────── TRANSCRIPTION ─────────────────────────────── -->
+  <h2 id="transcription">Transcription Service — <code>services/transcription.py</code></h2>
+
+  <p><strong>Lazy loading:</strong> Both the Whisper model and the embedding model are loaded once on first use (via module-level <code>None</code> globals). This avoids loading multi-GB models at import time.</p>
+
+  <h3>transcribe_audio_file(audio_key)</h3>
+  <ol>
+    <li>Downloads audio bytes from MinIO</li>
+    <li>Writes to a temp <code>.webm</code> file (Whisper needs a file path, not bytes)</li>
+    <li>Runs <code>model.transcribe(path, beam_size=5)</code> — higher beam size = slightly better accuracy, slower</li>
+    <li>Returns segments as dicts: <code>[{"text": "...", "start": 0.0, "end": 2.3}, ...]</code></li>
+    <li>Deletes the temp file</li>
+  </ol>
+
+  <h3>embed_texts(texts)</h3>
+  <ol>
+    <li>Runs <code>model.encode(texts, normalize_embeddings=True, batch_size=32)</code></li>
+    <li><code>normalize_embeddings=True</code> means vectors have length 1, so cosine similarity equals the dot product (faster)</li>
+    <li>Returns a list of 768-dim float arrays — one per text segment</li>
+  </ol>
+
+  <div class="callout info">
+    <strong>Why asyncio.to_thread()?</strong>
+    All CPU-intensive work (Whisper inference, embedding) runs via <code>asyncio.to_thread()</code> — this moves blocking work off the async event loop into a thread pool, so FastAPI can handle other requests while the model is running.
+  </div>
+
+  <!-- ─────────────────────────────── LLM ─────────────────────────────── -->
+  <h2 id="llm">LLM Service — <code>services/llm.py</code></h2>
+
+  <p><strong>Provider switching</strong> via <code>llm_provider</code> config:</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Provider</th><th>Extraction model</th><th>Query model</th></tr></thead>
+    <tbody>
+      <tr><td><code>ollama</code> (default)</td><td>llama3.1:8b</td><td>llama3.1:8b</td></tr>
+      <tr><td><code>openai</code></td><td>gpt-4o-mini</td><td>gpt-4o</td></tr>
+      <tr><td><code>anthropic</code></td><td>claude-haiku-4-5</td><td>claude-sonnet-4-6</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>All three use LangChain's <code>BaseChatModel</code> interface (<code>llm.ainvoke([HumanMessage(...)])</code>), so the rest of the code doesn't care which provider is active — a classic strategy pattern.</p>
+
+  <h3>extract_insights(transcript)</h3>
+  <p>Loads <code>extract_insights.txt</code> prompt, substitutes <code>{transcript}</code>, calls the LLM, parses the response as JSON. Has a regex fallback to find <code>{…}</code> if the LLM adds surrounding text.</p>
+
+  <h3>answer_query(question, context)</h3>
+  <p>Loads <code>query_meetings.txt</code> prompt, substitutes <code>{context}</code> (retrieved chunks) and <code>{question}</code>, returns the LLM's text answer.</p>
+
+  <!-- ─────────────────────────────── PROMPTS ─────────────────────────────── -->
+  <h2 id="prompts">LLM Prompts — <code>prompts/</code></h2>
+
+  <h3>extract_insights.txt</h3>
+  <p>Tells the LLM to return <strong>ONLY valid JSON with no explanation</strong>. The schema has <code>summary</code>, <code>action_items</code>, <code>decisions</code>, <code>topics</code>. Enforcing JSON output is necessary because you need to save structured data to the database, not free text.</p>
+
+  <h3>query_meetings.txt</h3>
+  <p>Tells the LLM to answer based <strong>ONLY on provided excerpts</strong> (RAG pattern). If the answer isn't in the excerpts, say so. This prevents the LLM from hallucinating things that were never said in your meetings.</p>
+
+  <h3>extract_entities.txt</h3>
+  <p>Extracts people, companies, and projects from a transcript into JSON. Intended for the memory system (<code>MemoryEntity</code> table) — not yet fully wired into the main pipeline.</p>
+
+  <!-- ─────────────────────────────── SEARCH ─────────────────────────────── -->
+  <h2 id="search">Semantic Search — <code>services/query.py</code></h2>
+  <p>This is the "ask a question across all your meetings" feature. It implements the <strong>RAG (Retrieval-Augmented Generation)</strong> pattern.</p>
+
+<pre><code><span class="kw">async def</span> <span class="fn">semantic_search</span>(req, user_id, db):
+    <span class="cm"># 1. Embed the user's question into a vector</span>
+    query_embedding = <span class="kw">await</span> embed_text(req.q)
+
+    <span class="cm"># 2. Find the 8 most similar chunks using pgvector's &lt;=&gt; operator (cosine distance)</span>
+    base_query = (
+        select(Chunk.id, Chunk.meeting_id, Chunk.text, Chunk.start_time)
+        .join(Meeting, Chunk.meeting_id == Meeting.id)
+        .where(Meeting.user_id == user_id)
+        .order_by(text(<span class="st">f"embedding &lt;=&gt; '{embedding_str}'::vector"</span>))
+        .limit(SIMILARITY_LIMIT)  <span class="cm"># 8 chunks</span>
+    )
+
+    <span class="cm"># 3. Feed those chunks as context to the LLM</span>
+    answer = <span class="kw">await</span> answer_query(req.q, <span class="st">"\n"</span>.join(context_parts))
+</code></pre>
+
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Convert question to vector.</strong> The same embedding model used during indexing is applied to the user's question.</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Vector similarity search.</strong> <code>&lt;=&gt;</code> is pgvector's cosine distance operator. The IVFFlat index makes this fast. "pricing discussion" matches "cost debate" because their vectors are close — keyword search would miss this.</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>LLM answers grounded in your actual meetings.</strong> The retrieved excerpts become context; the LLM generates an answer citing them.</div></div>
+  </div>
+
+  <!-- ─────────────────────────────── STORAGE ─────────────────────────────── -->
+  <h2 id="storage">Object Storage — <code>utils/storage.py</code></h2>
+  <p>Uses <code>boto3</code> (the AWS SDK) pointed at MinIO — MinIO implements the S3 API, so the same code works with real AWS S3 in production. Three operations:</p>
+  <ul>
+    <li><code>upload_file(key, data, content_type)</code> — <code>put_object</code> to the bucket</li>
+    <li><code>download_file(key)</code> — <code>get_object</code>, reads the full body</li>
+    <li><code>get_presigned_url(key, expires_in=3600)</code> — generates a signed URL valid for 1 hour, used to let the web app serve audio without proxying through the API</li>
+  </ul>
+  <p>The client is lazily initialized with a module-level singleton (<code>_client = None</code>).</p>
+
+  <!-- ─────────────────────────────── EXTENSION ─────────────────────────────── -->
+  <h2 id="extension">Chrome Extension — <code>apps/extension/</code></h2>
+  <p>Built with <strong>Plasmo</strong>, a framework for Chrome extensions with React and TypeScript.</p>
+
+  <h3 id="bg">background.ts — The Service Worker</h3>
+  <p>This is the brain of the extension. It runs persistently in the background.</p>
+
+  <h4>Tab detection</h4>
+<pre><code>chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  <span class="kw">if</span> (changeInfo.status === <span class="st">"complete"</span> && MEET_PATTERN.test(tab.url)) {
+    handleMeetTabOpened(tabId);
+  }
+});
+</code></pre>
+  <p>When a Google Meet URL fully loads, recording starts automatically.</p>
+
+  <h4>Recording flow</h4>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>handleMeetTabOpened</strong> — gets auth token from <code>chrome.storage.local</code>, calls API to create a meeting record, calls <code>startRecording</code></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>startRecording</strong> — uses <code>chrome.tabCapture.getMediaStreamId</code> to get the tab's audio stream, creates a <code>MediaRecorder</code> with <code>audio/webm;codecs=opus</code></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">Opens a WebSocket connection to the backend</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>setInterval(flushChunk, 5000)</strong> — every 5 seconds, converts buffered audio blobs to base64 and sends over WebSocket</div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-body"><strong>stopRecording</strong> — flushes remaining audio, sends <code>{"type": "stop"}</code>, closes WebSocket</div></div>
+  </div>
+
+  <h3 id="content">content.ts — The Content Script</h3>
+  <p>Injected into every <code>meet.google.com</code> page. Watches the DOM for participant tile elements using a <code>MutationObserver</code>. When participants change, it waits 2 seconds (debounce), extracts names from the DOM, and sends them to the background service worker via <code>chrome.runtime.sendMessage</code>. Used for speaker diarization (Phase 2 — not yet wired).</p>
+
+  <h3 id="popup">popup/index.tsx — Settings Popup</h3>
+  <p>A small React form that saves two values to <code>chrome.storage.local</code>:</p>
+  <ul>
+    <li><code>apiUrl</code> — which backend to talk to</li>
+    <li><code>accessToken</code> — the JWT to authenticate with</li>
+  </ul>
+  <p>You paste your token from the web app. This is how the extension knows who you are.</p>
+
+  <h3 id="sidepanel">sidepanel/index.tsx — Side Panel UI</h3>
+  <p>Shows recording status during a meeting. Listens to <code>chrome.storage.onChanged</code> — whenever <code>recordingState</code> changes in storage (set by the background when recording starts/stops), the UI updates automatically. Has a "Stop recording" button that sends <code>STOP_RECORDING</code> to the background.</p>
+
+  <!-- ─────────────────────────────── WEBAPP ─────────────────────────────── -->
+  <h2 id="webapp">Next.js Web App — <code>apps/web/</code></h2>
+
+  <h3>Authentication — <code>lib/auth.ts</code></h3>
+  <p>Uses <strong>NextAuth</strong> with two providers:</p>
+  <ul>
+    <li><strong>Google OAuth</strong> — sign in with Google</li>
+    <li><strong>Credentials</strong> — email/password (calls FastAPI <code>/auth/login</code>)</li>
+  </ul>
+  <p>The <code>jwt</code> callback stores the FastAPI access token inside the NextAuth JWT. The <code>session</code> callback exposes it as <code>session.accessToken</code>. This bridges NextAuth's session management with the FastAPI JWT system.</p>
+
+  <h3>API Client — <code>lib/api.ts</code></h3>
+  <p>A thin wrapper around <code>fetch</code>. Every call goes to <code>NEXT_PUBLIC_API_URL/api/v1</code>. Organized into three namespaces:</p>
+<pre><code>authApi.register(email, password, name)
+authApi.login(email, password)
+
+meetingsApi.list(token, status?)
+meetingsApi.get(token, id)
+meetingsApi.transcript(token, id)
+
+queryApi.ask(token, question, meetingIds?)
+</code></pre>
+
+  <h3>State Management — <code>lib/store.ts</code></h3>
+  <p>Uses <strong>Zustand</strong> — a minimal state library. Currently just holds the <code>accessToken</code>. Zustand is simpler than Redux: one function call creates a store with getters and setters.</p>
+
+  <h3>Key Pages</h3>
+  <ul>
+    <li><strong>/meetings</strong> — lists all meetings with status badges. Clicking one goes to <code>/meetings/[id]</code>.</li>
+    <li><strong>/meetings/[id]</strong> — two tabs: "Summary" (insights, action items, decisions, topics) and "Transcript" (lazy-loaded, only when tab is active and meeting is done). Shows a "Processing…" banner while status is <code>"processing"</code>.</li>
+    <li><strong>/query</strong> — text input for asking questions. Submits to <code>/query</code>, displays the LLM's answer and source chunks (each linked to the meeting it came from).</li>
+  </ul>
+
+  <!-- ─────────────────────────────── E2E ─────────────────────────────── -->
+  <h2 id="e2e">End-to-End Flow</h2>
+  <p>What happens from you joining a Google Meet to being able to ask "what did we decide?"</p>
+
+  <div class="e2e">
+    <div class="e2e-step">
+      <h4>You open meet.google.com</h4>
+      <ul>
+        <li>Extension detects the URL</li>
+        <li>Calls <code>POST /api/v1/meetings</code> to create a meeting record</li>
+        <li>Captures tab audio with <code>MediaRecorder</code></li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Every 5 seconds while meeting runs</h4>
+      <ul>
+        <li>Audio chunks sent as base64 over WebSocket</li>
+        <li>Server buffers them in memory (<code>AUDIO_CHUNK_STORE</code>)</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Meeting ends (tab closes or you click Stop)</h4>
+      <ul>
+        <li>Extension sends <code>{"type": "stop"}</code></li>
+        <li>Server concatenates all audio bytes</li>
+        <li>Uploads to MinIO: <code>audio/&lt;uuid&gt;/recording.webm</code></li>
+        <li>Sets <code>meeting.status = "processing"</code></li>
+        <li>Fires <code>process_meeting(meeting_id)</code> into Celery queue</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Celery worker — Step 1: Transcription</h4>
+      <ul>
+        <li>Downloads audio from MinIO</li>
+        <li>Runs faster-whisper (speech-to-text)</li>
+        <li>Uploads transcript JSON back to MinIO</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Celery worker — Step 2: Embedding</h4>
+      <ul>
+        <li>Downloads transcript JSON</li>
+        <li>Runs each segment through <code>nomic-embed-text</code></li>
+        <li>Stores <code>Chunk</code> rows with 768-dim vectors in PostgreSQL</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Celery worker — Step 3: Insight Extraction</h4>
+      <ul>
+        <li>Downloads transcript, concatenates all text</li>
+        <li>Sends to LLM with <code>extract_insights</code> prompt</li>
+        <li>Saves <code>MeetingInsights</code> row (summary, action items, decisions, topics)</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Celery worker — Step 4: Done</h4>
+      <ul>
+        <li>Sets <code>meeting.status = "done"</code></li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>You open the web app</h4>
+      <ul>
+        <li>Sees the meeting listed as "done"</li>
+        <li>Clicks it → sees summary, action items, decisions, transcript</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>You type "what did we decide about pricing?"</h4>
+      <ul>
+        <li>Web app POSTs <code>{"q": "what did we decide about pricing?"}</code></li>
+        <li>API embeds your question (same 768-dim model)</li>
+        <li>PostgreSQL cosine similarity search finds top 8 chunks</li>
+        <li>Those chunks become context for the LLM</li>
+        <li>LLM answers grounded in your actual meeting content</li>
+        <li>You see the answer with links back to the source meetings</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────── TECH ─────────────────────────────── -->
+  <h2 id="tech">Tech Stack &amp; Why</h2>
+
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Technology</th><th>Why it's used</th></tr></thead>
+    <tbody>
+      <tr><td><strong>FastAPI</strong></td><td>Async Python web framework — handles many requests concurrently without threads</td></tr>
+      <tr><td><strong>SQLAlchemy async</strong></td><td>Async ORM — database calls don't block the event loop</td></tr>
+      <tr><td><strong>Alembic</strong></td><td>Schema migrations — controlled, versioned database changes</td></tr>
+      <tr><td><strong>Celery + Redis</strong></td><td>Background job queue — long tasks run outside the HTTP request lifecycle</td></tr>
+      <tr><td><strong>PostgreSQL + pgvector</strong></td><td>Stores vectors alongside regular data — enables SQL-level vector similarity search</td></tr>
+      <tr><td><strong>MinIO</strong></td><td>S3-compatible local storage — large binary files (audio, JSON) don't belong in the database</td></tr>
+      <tr><td><strong>faster-whisper</strong></td><td>Efficient CPU/GPU speech-to-text from OpenAI Whisper weights, faster than the original library</td></tr>
+      <tr><td><strong>sentence-transformers</strong></td><td>Converts text to semantic vectors — "pricing discussion" ≈ "cost debate" at the vector level</td></tr>
+      <tr><td><strong>LangChain</strong></td><td>Unified interface to switch between Ollama/OpenAI/Anthropic without changing business logic</td></tr>
+      <tr><td><strong>JWT</strong></td><td>Stateless auth — no server-side session storage needed</td></tr>
+      <tr><td><strong>Plasmo</strong></td><td>Chrome extension framework — handles bundling TypeScript/React for extension contexts</td></tr>
+      <tr><td><strong>NextAuth</strong></td><td>Handles OAuth flows and session management in Next.js</td></tr>
+      <tr><td><strong>TanStack Query</strong></td><td>Smart data fetching with caching and lazy loading in React</td></tr>
+      <tr><td><strong>Zustand</strong></td><td>Minimal global state — lighter than Redux for simple cases</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- ─────────────────────────────── PATTERNS ─────────────────────────────── -->
+  <h2 id="patterns">Key Patterns to Learn From</h2>
+
+  <h3>Dependency Injection in FastAPI</h3>
+<pre><code><span class="kw">@router.get</span>(<span class="st">"/{id}"</span>)
+<span class="kw">async def</span> <span class="fn">get_one</span>(
+    id: <span class="ty">uuid.UUID</span>,
+    current_user: <span class="ty">User</span> = Depends(get_current_user),
+    db: <span class="ty">AsyncSession</span> = Depends(get_db),
+):
+</code></pre>
+  <p>FastAPI calls <code>get_db</code> and <code>get_current_user</code> automatically for every request. If <code>get_current_user</code> raises a 401, the route function never even runs. This keeps auth logic out of every route handler.</p>
+
+  <h3>Async-to-Sync Bridge (Celery Tasks)</h3>
+<pre><code><span class="kw">@celery_app.task</span>(bind=<span class="kw">True</span>, max_retries=<span class="nu">3</span>)
+<span class="kw">def</span> <span class="fn">my_task</span>(self, meeting_id: <span class="ty">str</span>):
+    <span class="kw">async def</span> <span class="fn">_work</span>():
+        <span class="kw">async with</span> AsyncSessionFactory() <span class="kw">as</span> db:
+            ...
+
+    <span class="kw">try</span>:
+        asyncio.get_event_loop().run_until_complete(_work())
+    <span class="kw">except</span> Exception <span class="kw">as</span> exc:
+        <span class="kw">raise</span> self.retry(exc=exc, countdown=<span class="nu">30</span>)
+</code></pre>
+
+  <h3>Singleton Lazy Init (Expensive Models)</h3>
+<pre><code>_model = <span class="kw">None</span>
+
+<span class="kw">def</span> <span class="fn">get_model</span>():
+    <span class="kw">global</span> _model
+    <span class="kw">if</span> _model <span class="kw">is None</span>:
+        _model = ExpensiveModel()   <span class="cm"># loads GB of weights once</span>
+    <span class="kw">return</span> _model
+</code></pre>
+
+  <h3>Pydantic for Validation and Serialization</h3>
+  <ul>
+    <li><strong>Input schemas</strong> (e.g., <code>MeetingCreate</code>) — validate and parse incoming JSON automatically</li>
+    <li><strong>Output schemas</strong> (e.g., <code>MeetingResponse</code>) — control exactly which fields are returned</li>
+    <li><code>from_attributes = True</code> in <code>Config</code> — allows reading directly from SQLAlchemy model instances</li>
+  </ul>
+
+  <h3>RAG — Retrieval-Augmented Generation</h3>
+  <p>The query pipeline is a textbook RAG implementation:</p>
+  <ol>
+    <li><strong>Index time:</strong> embed each transcript segment → store vector in DB</li>
+    <li><strong>Query time:</strong> embed the question → vector search → retrieve top-K relevant chunks → feed as LLM context → generate grounded answer</li>
+  </ol>
+  <p>The key insight is that the LLM only "knows" what's in the retrieved context, so answers are grounded in your actual meeting data rather than the model's training data.</p>
+
+  <hr />
+  <p style="color: var(--muted); font-size: 0.8em; text-align: center;">Generated from MeetBuddy source code · 2026-05-17</p>
+
+</main>
+</body>
+</html>

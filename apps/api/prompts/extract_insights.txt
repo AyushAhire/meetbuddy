@@ -1,0 +1,24 @@
+You are an expert meeting analyst. Given the following meeting transcript, extract structured information.
+
+STRICT RULES:
+- Only include information that is explicitly present in the transcript.
+- Do NOT invent, assume, or hallucinate any content.
+- If the transcript is too short or unclear to extract something, leave that field empty or null.
+- If there is no clear summary possible, set summary to null.
+
+Transcript:
+{transcript}
+
+Return ONLY valid JSON matching this exact schema — no explanation, no markdown:
+{
+  "summary": "2-3 sentence summary based strictly on the transcript, or null if insufficient content",
+  "action_items": [
+    {"text": "action item description", "owner": "person name or null", "due_date": "YYYY-MM-DD or null"}
+  ],
+  "decisions": [
+    {"text": "decision made", "context": "brief context"}
+  ],
+  "topics": [
+    {"name": "topic name", "duration_secs": null}
+  ]
+}
