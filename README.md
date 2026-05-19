@@ -197,7 +197,6 @@ Base URL: `http://localhost:8000/api/v1`
 | `GET` | `/query?q=...` | Semantic search across all meetings |
 | `WS` | `/ws/{meeting_id}` | Stream audio chunks during a live meeting |
 
-Health check: `GET /health`
 
 ---
 
