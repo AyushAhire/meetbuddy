@@ -8,15 +8,13 @@ import { format } from "date-fns";
 import { Calendar, Clock, CheckSquare, Trash2, CheckCheck } from "lucide-react";
 import Link from "next/link";
 
-interface Props {
-  accessToken: string;
-}
+interface Props { accessToken: string }
 
-const STATUS_COLORS: Record<string, string> = {
-  done: "bg-green-100 text-green-800",
-  processing: "bg-yellow-100 text-yellow-800",
-  recording: "bg-blue-100 text-blue-800",
-  failed: "bg-red-100 text-red-800",
+const STATUS: Record<string, { color: string; label: string; pulse?: boolean }> = {
+  done:       { color: "#22c55e", label: "Done" },
+  processing: { color: "#f59e0b", label: "Processing", pulse: true },
+  recording:  { color: "#6366f1", label: "Recording",  pulse: true },
+  failed:     { color: "#ef4444", label: "Failed" },
 };
 
 export function MeetingsList({ accessToken }: Props) {
@@ -32,8 +30,7 @@ export function MeetingsList({ accessToken }: Props) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (ids: string[]) =>
-      Promise.all(ids.map((id) => meetingsApi.delete(accessToken, id))),
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => meetingsApi.delete(accessToken, id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setSelected(new Set());
@@ -49,10 +46,6 @@ export function MeetingsList({ accessToken }: Props) {
     });
   }
 
-  function selectAll() {
-    setSelected(new Set(meetings?.map((m) => m.id) ?? []));
-  }
-
   function deleteSelected() {
     if (!selected.size) return;
     if (!confirm(`Delete ${selected.size} recording${selected.size > 1 ? "s" : ""}?`)) return;
@@ -61,61 +54,71 @@ export function MeetingsList({ accessToken }: Props) {
 
   if (isLoading) {
     return (
-      <div className="space-y-3">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />
+      <div className="space-y-px">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-14 rounded surface animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
         ))}
       </div>
     );
   }
 
-  if (error) return <p className="text-destructive">Failed to load meetings.</p>;
+  if (error) {
+    return (
+      <p className="text-xs text-destructive surface px-4 py-3">
+        Failed to load meetings.
+      </p>
+    );
+  }
 
   if (!meetings?.length) {
     return (
-      <div className="text-center py-16 text-muted-foreground">
-        <p className="text-lg font-medium mb-2">No meetings yet</p>
-        <p className="text-sm">Install the browser extension to start capturing meetings.</p>
+      <div className="surface py-16 text-center animate-fade-in-up">
+        <p className="text-sm font-medium text-foreground mb-1">No meetings yet</p>
+        <p className="text-xs text-muted-foreground">
+          Install the browser extension to start capturing meetings.
+        </p>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="animate-fade-in">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         {selecting ? (
           <>
-            <button onClick={selectAll} className="flex items-center gap-1.5 text-xs px-3 py-1.5 border rounded hover:bg-accent">
-              <CheckCheck className="w-3.5 h-3.5" /> Select all
+            <button onClick={() => setSelected(new Set(meetings.map((m) => m.id)))} className="btn-ghost">
+              <CheckCheck className="w-3 h-3" /> All
             </button>
             <button
               onClick={deleteSelected}
               disabled={!selected.size || deleteMutation.isPending}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-40"
+              className="btn-danger"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3 h-3" />
               {deleteMutation.isPending ? "Deleting…" : `Delete${selected.size ? ` (${selected.size})` : ""}`}
             </button>
-            <button onClick={() => { setSelecting(false); setSelected(new Set()); }} className="text-xs px-3 py-1.5 border rounded hover:bg-accent ml-auto">
+            <button onClick={() => { setSelecting(false); setSelected(new Set()); }} className="btn-ghost ml-auto">
               Cancel
             </button>
           </>
         ) : (
-          <button onClick={() => setSelecting(true)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 border rounded hover:bg-accent ml-auto">
-            <Trash2 className="w-3.5 h-3.5" /> Select to delete
+          <button onClick={() => setSelecting(true)} className="btn-ghost ml-auto">
+            <Trash2 className="w-3 h-3" /> Select
           </button>
         )}
       </div>
 
-      <div className="space-y-3">
-        {meetings.map((m) => (
-          <MeetingCard
+      {/* List */}
+      <div className="surface divide-y divide-border overflow-hidden">
+        {meetings.map((m, i) => (
+          <MeetingRow
             key={m.id}
             meeting={m}
             selecting={selecting}
             selected={selected.has(m.id)}
             onToggle={() => toggleSelect(m.id)}
+            index={i}
           />
         ))}
       </div>
@@ -123,68 +126,78 @@ export function MeetingsList({ accessToken }: Props) {
   );
 }
 
-function MeetingCard({
-  meeting,
-  selecting,
-  selected,
-  onToggle,
+function MeetingRow({
+  meeting, selecting, selected, onToggle, index,
 }: {
   meeting: Meeting;
   selecting: boolean;
   selected: boolean;
   onToggle: () => void;
+  index: number;
 }) {
-  const statusColor = STATUS_COLORS[meeting.status] ?? "bg-gray-100 text-gray-800";
+  const status = STATUS[meeting.status] ?? { color: "#737373", label: meeting.status };
   const actionItemCount = meeting.insights?.action_items?.length ?? 0;
 
-  const content = (
-    <div className={`border rounded-lg p-4 transition-colors ${selecting ? (selected ? "border-blue-500 bg-blue-50" : "hover:bg-accent/50 cursor-pointer") : "hover:bg-accent/50"}`}>
-      <div className="flex items-start gap-3">
-        {selecting && (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggle}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-1 w-4 h-4 accent-blue-600 shrink-0"
-          />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium truncate">
-              {meeting.title ?? `${meeting.platform} meeting`}
-            </h3>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
-              {meeting.status}
+  const row = (
+    <div
+      className="flex items-center gap-3 px-4 py-3 surface-hover animate-fade-in-up"
+      style={{
+        animationDelay: `${Math.min(index * 40, 320)}ms`,
+        ...(selecting && selected ? { background: "hsl(245 58% 61% / 0.06)" } : {}),
+      }}
+    >
+      {selecting && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          onClick={(e) => e.stopPropagation()}
+          className="w-3.5 h-3.5 flex-shrink-0 accent-primary"
+        />
+      )}
+
+      {/* Status dot */}
+      <span
+        className={`status-dot flex-shrink-0 ${status.pulse ? "animate-blink" : ""}`}
+        style={{ background: status.color }}
+      />
+
+      {/* Title + meta */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground truncate leading-snug">
+          {meeting.title ?? `${meeting.platform} meeting`}
+        </p>
+        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            {format(new Date(meeting.started_at), "MMM d, yyyy")}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {formatDuration(meeting.duration_secs)}
+          </span>
+          {actionItemCount > 0 && (
+            <span className="flex items-center gap-1" style={{ color: "hsl(245 58% 70%)" }}>
+              <CheckSquare className="w-3 h-3" />
+              {actionItemCount} action{actionItemCount !== 1 ? "s" : ""}
             </span>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              {format(new Date(meeting.started_at), "MMM d, yyyy")}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              {formatDuration(meeting.duration_secs)}
-            </span>
-            {actionItemCount > 0 && (
-              <span className="flex items-center gap-1">
-                <CheckSquare className="w-3.5 h-3.5" />
-                {actionItemCount} action item{actionItemCount !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-          {meeting.insights?.summary && (
-            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{meeting.insights.summary}</p>
           )}
         </div>
       </div>
+
+      {/* Status label */}
+      <span className="text-[11px] flex-shrink-0" style={{ color: status.color }}>
+        {status.label}
+      </span>
+
+      {!selecting && (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-muted-foreground/40">
+          <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
     </div>
   );
 
-  if (selecting) {
-    return <div onClick={onToggle}>{content}</div>;
-  }
-
-  return <Link href={`/meetings/${meeting.id}`}>{content}</Link>;
+  if (selecting) return <div onClick={onToggle} className="cursor-pointer">{row}</div>;
+  return <Link href={`/meetings/${meeting.id}`}>{row}</Link>;
 }

@@ -13,7 +13,6 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });
-
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
@@ -35,59 +34,62 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-md p-8 rounded-lg border bg-card shadow-sm">
-        <h1 className="text-2xl font-bold mb-2">Create your account</h1>
-        <p className="text-muted-foreground mb-6 text-sm">Start capturing meeting intelligence</p>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-[360px] animate-fade-in-up">
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="text-sm font-medium block mb-1">Name</label>
-            <input
-              {...register("name")}
-              type="text"
-              placeholder="Your name"
-              className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium block mb-1">Email</label>
-            <input
-              {...register("email")}
-              type="email"
-              placeholder="you@example.com"
-              className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium block mb-1">Password</label>
-            <input
-              {...register("password")}
-              type="password"
-              placeholder="••••••••"
-              className="w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            {errors.password && <p className="text-destructive text-xs mt-1">{errors.password.message}</p>}
-          </div>
-
-          {error && <p className="text-destructive text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-primary text-primary-foreground py-2 rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        {/* Wordmark */}
+        <div className="flex items-center gap-2 justify-center mb-8">
+          <div
+            className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+            style={{ background: "hsl(245 58% 61%)" }}
           >
-            {isSubmitting ? "Creating account..." : "Create account"}
-          </button>
-        </form>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <rect x="6" y="4" width="4" height="16" rx="1" fill="white" />
+              <rect x="14" y="4" width="4" height="16" rx="1" fill="white" />
+            </svg>
+          </div>
+          <span className="font-semibold text-sm text-foreground tracking-tight">MeetBuddy</span>
+        </div>
 
-        <p className="text-xs text-center text-muted-foreground mt-4">
+        {/* Card */}
+        <div className="surface p-6">
+          <h1 className="text-base font-semibold text-foreground mb-0.5">Create account</h1>
+          <p className="text-xs text-muted-foreground mb-5">Start capturing meeting intelligence</p>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
+            <div>
+              <label className="field-label">Name</label>
+              <input {...register("name")} type="text" placeholder="Your name" className="field-input" />
+              {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
+            </div>
+
+            <div>
+              <label className="field-label">Email</label>
+              <input {...register("email")} type="email" placeholder="you@example.com" className="field-input" />
+              {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
+            </div>
+
+            <div>
+              <label className="field-label">Password</label>
+              <input {...register("password")} type="password" placeholder="••••••••" className="field-input" />
+              {errors.password && <p className="text-destructive text-xs mt-1">{errors.password.message}</p>}
+            </div>
+
+            {error && (
+              <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2 rounded">
+                {error}
+              </p>
+            )}
+
+            <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-2.5">
+              {isSubmitting ? "Creating account…" : "Create account"}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-[11px] text-muted-foreground mt-4">
           Already have an account?{" "}
-          <a href="/login" className="text-primary hover:underline">Sign in</a>
+          <a href="/login" className="text-primary hover:underline underline-offset-2">Sign in</a>
         </p>
       </div>
     </div>

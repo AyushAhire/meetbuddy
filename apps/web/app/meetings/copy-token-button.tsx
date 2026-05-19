@@ -13,13 +13,9 @@ export function CopyTokenButton({ token }: { token: string }) {
   }
 
   return (
-    <button
-      onClick={copy}
-      className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border hover:bg-accent transition-colors"
-      title="Copy API token for the browser extension"
-    >
-      {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-      {copied ? "Copied!" : "Copy token"}
+    <button onClick={copy} className="btn-ghost" title="Copy API token for the browser extension">
+      {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+      {copied ? "Copied" : "Copy token"}
     </button>
   );
 }

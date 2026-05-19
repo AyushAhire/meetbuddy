@@ -3,34 +3,43 @@ import { redirect } from "next/navigation";
 import { meetingsApi } from "@/lib/api";
 import { MeetingDetail } from "./meeting-detail";
 
-interface Props {
-  params: { id: string };
-}
+interface Props { params: { id: string } }
 
 export default async function MeetingDetailPage({ params }: Props) {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const token = (session as Record<string, unknown>).accessToken as string;
+  const token = (session as unknown as Record<string, unknown>).accessToken as string;
   const meeting = await meetingsApi.get(token, params.id);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <a href="/meetings" className="text-sm text-muted-foreground hover:text-foreground">
-            ← Meetings
-          </a>
-          <span className="text-muted-foreground">/</span>
-          <span className="font-medium text-sm truncate max-w-xs">
-            {meeting.title ?? `${meeting.platform} meeting`}
-          </span>
-        </div>
-        <span className="text-sm text-muted-foreground">{session.user?.email}</span>
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Nav */}
+      <header className="app-nav flex-shrink-0 px-5 h-12 flex items-center gap-3">
+        <a
+          href="/meetings"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Meetings
+        </a>
+        <span className="text-muted-foreground/40 text-xs">/</span>
+        <span className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-xs">
+          {meeting.title ?? `${meeting.platform} meeting`}
+        </span>
+        <span className="text-xs text-muted-foreground ml-auto hidden sm:block">{session.user?.email}</span>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <MeetingDetail meeting={meeting} accessToken={token} />
+      {/* Scrollable content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-5 py-8">
+          <MeetingDetail meeting={meeting} accessToken={token} />
+        </div>
+        <div className="max-w-4xl mx-auto px-5 pb-8 pt-4">
+          <span className="text-[11px] text-muted-foreground/40">MeetBuddy · Privacy-first</span>
+        </div>
       </main>
     </div>
   );

@@ -6,9 +6,13 @@ import { formatTime } from "@/lib/utils";
 import { Search, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
-interface Props {
-  accessToken: string;
-}
+interface Props { accessToken: string }
+
+const EXAMPLES = [
+  "What action items were assigned last week?",
+  "What did we decide about pricing?",
+  "Summarize the team's blockers",
+];
 
 export function QueryInterface({ accessToken }: Props) {
   const [question, setQuestion] = useState("");
@@ -19,14 +23,11 @@ export function QueryInterface({ accessToken }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!question.trim()) return;
-
     setLoading(true);
     setError(null);
     setResult(null);
-
     try {
-      const res = await queryApi.ask(accessToken, question);
-      setResult(res);
+      setResult(await queryApi.ask(accessToken, question));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Query failed");
     } finally {
@@ -35,53 +36,81 @@ export function QueryInterface({ accessToken }: Props) {
   }
 
   return (
-    <div>
-      <form onSubmit={handleSubmit} className="flex gap-2 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+    <div className="animate-fade-in-up">
+      {/* Search bar */}
+      <form onSubmit={handleSubmit} className="mb-5">
+        <div className="surface flex items-center gap-2 px-3 py-2.5 focus-within:border-primary/50 transition-colors">
+          <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="What did we decide about the product roadmap?"
-            className="w-full pl-9 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
           />
+          <button
+            type="submit"
+            disabled={loading || !question.trim()}
+            className="btn-primary text-xs px-3 py-1.5 flex-shrink-0"
+          >
+            {loading ? "Searching…" : "Ask"}
+          </button>
         </div>
-        <button
-          type="submit"
-          disabled={loading || !question.trim()}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? "Searching..." : "Ask"}
-        </button>
+
+        {/* Example prompts */}
+        {!result && !loading && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {EXAMPLES.map((ex) => (
+              <button
+                key={ex}
+                type="button"
+                onClick={() => setQuestion(ex)}
+                className="text-[11px] text-muted-foreground border border-border rounded px-2.5 py-1 hover:border-border/80 hover:text-foreground transition-colors"
+                style={{ background: "hsl(var(--secondary))" }}
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+        )}
       </form>
 
-      {error && <p className="text-destructive text-sm mb-4">{error}</p>}
+      {error && (
+        <p className="text-xs text-destructive surface px-4 py-3 mb-4 animate-fade-in">
+          {error}
+        </p>
+      )}
 
       {result && (
-        <div className="space-y-6">
-          <div className="border rounded-lg p-4">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Answer</h2>
-            <p className="text-sm leading-relaxed">{result.answer}</p>
+        <div className="space-y-4 animate-fade-in-up">
+          {/* Answer */}
+          <div className="surface p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              Answer
+            </p>
+            <p className="text-sm text-foreground leading-relaxed">{result.answer}</p>
           </div>
 
+          {/* Sources */}
           {result.sources.length > 0 && (
             <div>
-              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Sources</h2>
-              <div className="space-y-2">
-                {result.sources.map((src) => (
-                  <div key={src.chunk_id} className="border rounded-md p-3 text-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">
-                        at {formatTime(src.start_time)}
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                Sources
+              </p>
+              <div className="surface divide-y divide-border overflow-hidden">
+                {result.sources.map((src, i) => (
+                  <div key={src.chunk_id} className="px-4 py-3 animate-fade-in-up" style={{ animationDelay: `${i * 50}ms` }}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        {formatTime(src.start_time)}
                       </span>
                       <Link
                         href={`/meetings/${src.meeting_id}`}
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                        className="text-[11px] text-primary hover:underline underline-offset-2 flex items-center gap-1"
                       >
-                        View meeting <ExternalLink className="w-3 h-3" />
+                        View <ExternalLink className="w-2.5 h-2.5" />
                       </Link>
                     </div>
-                    <p className="text-muted-foreground">{src.text}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{src.text}</p>
                   </div>
                 ))}
               </div>
