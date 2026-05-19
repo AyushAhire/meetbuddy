@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
+    # Transcription — set TRANSCRIPTION_PROVIDER=groq and add GROQ_API_KEY to use Groq
+    transcription_provider: str = "local"   # "groq" | "local"
+    groq_api_key: str = ""
+    groq_whisper_model: str = "whisper-large-v3-turbo"
     whisper_model: str = "base"
     hf_token: str = ""
 

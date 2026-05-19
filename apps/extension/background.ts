@@ -49,16 +49,6 @@ chrome.action.onClicked.addListener(async (tab) => {
     console.error("[MeetBuddy] sidePanel.open failed:", e);
   }
 
-  // Re-inject content script so it's always fresh (handles extension-reload orphan case)
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content.js"],
-    });
-  } catch (e) {
-    console.warn("[MeetBuddy] scripting inject:", e);
-  }
-
   // Get stream ID while the extension is invoked (the only moment tabCapture works)
   chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, (streamId) => {
     if (chrome.runtime.lastError) {

@@ -2,16 +2,17 @@ import "./style.css"
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, AlertCircle, Settings, ChevronDown, ChevronUp, Check, ExternalLink } from "lucide-react";
 
-type RecordingError = "no_token" | "api_error" | "ws_error" | "capture_failed";
+type RecordingError = "no_token" | "api_error" | "ws_error" | "capture_failed" | "mic_denied";
 
 const ERROR_MESSAGES: Record<RecordingError, string> = {
   no_token:       "No access token set. Open Settings to add one.",
   api_error:      "Could not reach the MeetBuddy server.",
   ws_error:       "Lost connection to the server.",
   capture_failed: "Could not capture tab audio.",
+  mic_denied:     "Microphone access denied — recording tab audio only.",
 };
 
-const CHUNK_MS   = 5_000;
+const CHUNK_MS    = 5_000;
 const DEFAULT_API = "http://localhost:8000";
 const WAVE_DELAYS = [0, 140, 70, 210, 105];
 
@@ -20,6 +21,7 @@ export default function SidePanel() {
   const [meetingId, setMeetingId]       = useState<string | null>(null);
   const [onMeet, setOnMeet]             = useState(false);
   const [error, setError]               = useState<RecordingError | null>(null);
+  const [micActive, setMicActive]       = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiUrl, setApiUrl]             = useState(DEFAULT_API);
   const [token, setToken]               = useState("");
@@ -27,16 +29,16 @@ export default function SidePanel() {
   const [audioDevices, setAudioDevices] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
 
-  const wsRef       = useRef<WebSocket | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioElRef  = useRef<HTMLAudioElement | null>(null);
-  const chunksRef   = useRef<Blob[]>([]);
-  const seqRef      = useRef(0);
-  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const bgPortRef   = useRef<chrome.runtime.Port | null>(null);
-  const micPortRef  = useRef<chrome.runtime.Port | null>(null);
+  const wsRef        = useRef<WebSocket | null>(null);
+  const recorderRef  = useRef<MediaRecorder | null>(null);
+  const tabStreamRef = useRef<MediaStream | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef  = useRef<AudioContext | null>(null);
+  const audioElRef   = useRef<HTMLAudioElement | null>(null);
+  const chunksRef    = useRef<Blob[]>([]);
+  const seqRef       = useRef(0);
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bgPortRef    = useRef<chrome.runtime.Port | null>(null);
 
   useEffect(() => {
     chrome.storage.local.get(["accessToken", "apiUrl", "meetTabReady", "audioDeviceId"], (s) => {
@@ -46,13 +48,33 @@ export default function SidePanel() {
       setOnMeet(!!s.meetTabReady);
     });
 
+    // Prime mic permission on sidepanel open — this is inside a user-gesture context
+    // (the sidepanel itself opened from a click), so Chrome will grant the permission.
+    // We stop the tracks immediately; we just need the grant stored for later.
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      .then((stream) => {
+        stream.getTracks().forEach((t) => t.stop());
+        // Now enumerate with labels (only works after permission granted)
+        return navigator.mediaDevices.enumerateDevices();
+      })
+      .then((devices) => {
+        const mics = devices
+          .filter((d) => d.kind === "audioinput")
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` }));
+        setAudioDevices(mics);
+      })
+      .catch(() => {
+        // Permission denied — enumerate anyway (labels will be empty)
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          const mics = devices
+            .filter((d) => d.kind === "audioinput")
+            .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` }));
+          setAudioDevices(mics);
+        }).catch(() => {});
+      });
+
     const port = chrome.runtime.connect({ name: "sidepanel" });
     bgPortRef.current = port;
-    port.onMessage.addListener((msg: { type: string; audio_b64?: string; seq?: number }) => {
-      if (msg.type === "MIC_CHUNK" && msg.audio_b64 && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "chunk", source: "mic", audio_b64: msg.audio_b64, seq: msg.seq }));
-      }
-    });
 
     chrome.runtime.sendMessage({ type: "GET_PENDING_CAPTURE" }, (resp) => {
       if (resp?.streamId) startRecording(resp.streamId);
@@ -90,7 +112,8 @@ export default function SidePanel() {
   function cleanup() {
     if (timerRef.current) clearInterval(timerRef.current);
     recorderRef.current?.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    tabStreamRef.current?.getTracks().forEach((t) => t.stop());
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close();
     audioCtxRef.current = null;
     if (audioElRef.current) {
@@ -98,18 +121,18 @@ export default function SidePanel() {
       audioElRef.current.srcObject = null;
       audioElRef.current = null;
     }
-    micPortRef.current?.disconnect();
-    micPortRef.current = null;
     flushChunk();
     wsRef.current?.send(JSON.stringify({ type: "stop" }));
     wsRef.current?.close();
-    recorderRef.current = null;
-    wsRef.current = null;
-    streamRef.current = null;
-    chunksRef.current = [];
-    seqRef.current = 0;
+    recorderRef.current  = null;
+    wsRef.current        = null;
+    tabStreamRef.current = null;
+    micStreamRef.current = null;
+    chunksRef.current    = [];
+    seqRef.current       = 0;
     chrome.storage.local.remove("recordingState");
     setRecording(false);
+    setMicActive(false);
     setMeetingId(null);
   }
 
@@ -120,6 +143,7 @@ export default function SidePanel() {
     const api = (stored.apiUrl as string | undefined) ?? apiUrl;
     if (!tok) { setError("no_token"); setShowSettings(true); return; }
 
+    // Create meeting on server
     let mId: string;
     try {
       const res = await fetch(`${api}/api/v1/meetings`, {
@@ -131,31 +155,62 @@ export default function SidePanel() {
       mId = (await res.json()).id;
     } catch { setError("api_error"); return; }
 
-    let stream: MediaStream;
+    // ── Tab audio (remote participants) ──
+    let tabStream: MediaStream;
     try {
-      const tabStream = await navigator.mediaDevices.getUserMedia({
-        audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } } as MediaTrackConstraints,
+      tabStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId },
+        } as MediaTrackConstraints,
         video: false,
       });
-      const audioEl = new Audio();
-      audioEl.srcObject = tabStream;
-      audioEl.play().catch(() => {});
-      audioElRef.current = audioEl;
-      const ctx = new AudioContext();
-      await ctx.resume();
-      audioCtxRef.current = ctx;
-      const dest = ctx.createMediaStreamDestination();
-      ctx.createMediaStreamSource(tabStream).connect(dest);
-      streamRef.current = new MediaStream([...tabStream.getTracks()]);
-      stream = dest.stream;
-    } catch { setError("capture_failed"); return; }
+    } catch (e: any) {
+      console.error("[MeetBuddy] tab capture failed:", e?.name, e?.message);
+      setError("capture_failed");
+      return;
+    }
 
+    // Play tab audio so user can still hear the meeting
+    const audioEl = new Audio();
+    audioEl.srcObject = tabStream;
+    audioEl.play().catch(() => {});
+    audioElRef.current = audioEl;
+    tabStreamRef.current = tabStream;
+
+    // AudioContext to mix both streams
+    const ctx = new AudioContext();
+    await ctx.resume();
+    audioCtxRef.current = ctx;
+    const dest = ctx.createMediaStreamDestination();
+    ctx.createMediaStreamSource(tabStream).connect(dest);
+
+    // ── Mic audio (local speaker) — captured directly in sidepanel ──
+    try {
+      const micConstraints: MediaStreamConstraints = {
+        audio: selectedDeviceId
+          ? { deviceId: { exact: selectedDeviceId } }
+          : true,
+        video: false,
+      };
+      const micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
+      ctx.createMediaStreamSource(micStream).connect(dest);
+      micStreamRef.current = micStream;
+      setMicActive(true);
+    } catch (e: any) {
+      // Non-fatal — proceed with tab-only audio
+      console.warn("[MeetBuddy] mic capture failed:", e?.name, e?.message);
+      setError("mic_denied");
+    }
+
+    const mixedStream = dest.stream;
+
+    // ── WebSocket ──
     const wsBase = api.replace(/^http/, "ws");
     const ws = new WebSocket(`${wsBase}/api/v1/ws/${mId}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      const recorder = new MediaRecorder(mixedStream, { mimeType: "audio/webm;codecs=opus" });
       recorderRef.current = recorder;
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.start();
@@ -163,23 +218,6 @@ export default function SidePanel() {
       chrome.storage.local.set({ recordingState: { meetingId: mId, status: "recording" } });
       setMeetingId(mId);
       setRecording(true);
-
-      setTimeout(() => chrome.tabs.query({ url: "https://meet.google.com/*" }, (tabs) => {
-        const tab = tabs.find((t) => t.id && t.status === "complete");
-        if (!tab?.id) return;
-        try {
-          const micPort = chrome.tabs.connect(tab.id, { name: "mic-audio" });
-          micPortRef.current = micPort;
-          micPort.onMessage.addListener((msg: { type: string; audio_b64?: string; seq?: number; mics?: { deviceId: string; label: string }[] }) => {
-            if (msg.type === "MIC_CHUNK" && msg.audio_b64 && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "chunk", source: "mic", audio_b64: msg.audio_b64, seq: msg.seq }));
-            }
-            if (msg.type === "DEVICE_LIST" && msg.mics) setAudioDevices(msg.mics);
-          });
-          micPort.postMessage({ type: "LIST_DEVICES" });
-          micPort.postMessage({ type: "START_MIC", deviceId: selectedDeviceId || undefined });
-        } catch (e) { console.warn("[MeetBuddy] mic:", e); }
-      }), 500);
     };
 
     ws.onerror = () => { setError("ws_error"); cleanup(); };
@@ -190,10 +228,15 @@ export default function SidePanel() {
     chrome.storage.local.set({ accessToken: token, apiUrl, audioDeviceId: selectedDeviceId }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      // Re-enumerate with new permissions after save
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        const mics = devices
+          .filter((d) => d.kind === "audioinput")
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` }));
+        setAudioDevices(mics);
+      }).catch(() => {});
     });
   }
-
-  const S = { padding: "0", margin: "0" } as const;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0c0c0e", color: "#ededed", display: "flex", flexDirection: "column" }}>
@@ -207,12 +250,8 @@ export default function SidePanel() {
           </svg>
         </div>
         <span style={{ fontWeight: 600, fontSize: 13 }}>MeetBuddy</span>
-        <a
-          href="http://localhost:3000/meetings"
-          target="_blank"
-          rel="noreferrer"
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#555", textDecoration: "none" }}
-        >
+        <a href="http://localhost:3000/meetings" target="_blank" rel="noreferrer"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#555", textDecoration: "none" }}>
           Dashboard <ExternalLink style={{ width: 10, height: 10 }} />
         </a>
       </div>
@@ -220,7 +259,6 @@ export default function SidePanel() {
       {/* Body */}
       <div style={{ flex: 1, padding: "16px 14px" }}>
         {recording ? (
-          /* ── Recording ── */
           <div className="animate-fade-in-up" style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 20 }}>
             {/* Waveform */}
             <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 20, marginBottom: 14 }}>
@@ -229,10 +267,20 @@ export default function SidePanel() {
               ))}
             </div>
 
-            {/* Status */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
               <div className="blink-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
               <span style={{ fontSize: 13, fontWeight: 600, color: "#22c55e" }}>Recording</span>
+            </div>
+
+            {/* Mic status pill */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, marginBottom: 18,
+              color: micActive ? "#22c55e" : "#666",
+              background: micActive ? "rgba(34,197,94,0.07)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${micActive ? "rgba(34,197,94,0.2)" : "#1e1e20"}`,
+              padding: "3px 8px", borderRadius: 4 }}>
+              {micActive
+                ? <><Mic style={{ width: 10, height: 10 }} /> Mic + Speaker</>
+                : <><MicOff style={{ width: 10, height: 10 }} /> Speaker only</>}
             </div>
 
             {meetingId && (
@@ -242,28 +290,29 @@ export default function SidePanel() {
             )}
 
             <p style={{ fontSize: 11, color: "#555", textAlign: "center", lineHeight: 1.65, marginBottom: 20, maxWidth: 200 }}>
-              Audio is being captured locally and will be processed after the meeting ends.
+              {micActive
+                ? "Capturing your mic and the meeting audio."
+                : "Capturing meeting audio only (mic access denied)."}
             </p>
 
             <button className="btn-danger" onClick={cleanup}>
-              <MicOff style={{ width: 12, height: 12 }} />
-              Stop recording
+              <MicOff style={{ width: 12, height: 12 }} /> Stop recording
             </button>
           </div>
         ) : (
-          /* ── Idle ── */
           <div className="animate-fade-in-up">
-            {/* Error */}
-            {error && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", borderRadius: 6, marginBottom: 12, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b", fontSize: 11, lineHeight: 1.55 }}>
+            {error && error !== "mic_denied" && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", borderRadius: 6, marginBottom: 12,
+                background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b", fontSize: 11, lineHeight: 1.55 }}>
                 <AlertCircle style={{ width: 12, height: 12, marginTop: 1, flexShrink: 0 }} />
                 {ERROR_MESSAGES[error]}
               </div>
             )}
 
-            {/* Status card */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px", borderRadius: 8, background: "#111113", border: "1px solid #222224", textAlign: "center" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a1a1c", border: "1px solid #262629", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px", borderRadius: 8,
+              background: "#111113", border: "1px solid #222224", textAlign: "center" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a1a1c", border: "1px solid #262629",
+                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
                 <MicOff style={{ width: 16, height: 16, color: "#3a3a3e" }} />
               </div>
               <p style={{ fontSize: 13, fontWeight: 600, color: "#666", marginBottom: 6 }}>Not recording</p>
@@ -283,10 +332,9 @@ export default function SidePanel() {
 
       {/* Settings */}
       <div style={{ borderTop: "1px solid #1e1e20", padding: "10px 14px" }}>
-        <button
-          onClick={() => setShowSettings((s) => !s)}
-          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#555", background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%", fontFamily: "inherit" }}
-        >
+        <button onClick={() => setShowSettings((s) => !s)}
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#555",
+            background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%", fontFamily: "inherit" }}>
           <Settings style={{ width: 12, height: 12 }} />
           Settings
           <span style={{ marginLeft: "auto" }}>
@@ -302,7 +350,8 @@ export default function SidePanel() {
             </div>
             <div>
               <label className="field-label">Access Token</label>
-              <input type="password" className="ext-input" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your API token" />
+              <input type="password" className="ext-input" value={token}
+                onChange={(e) => setToken(e.target.value)} placeholder="Paste your API token" />
             </div>
             {audioDevices.length > 0 && (
               <div>
@@ -321,7 +370,6 @@ export default function SidePanel() {
           </div>
         )}
       </div>
-
     </div>
   );
 }
