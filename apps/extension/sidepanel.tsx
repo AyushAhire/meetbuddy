@@ -1,53 +1,51 @@
 import "./style.css"
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, AlertCircle, Settings, ChevronDown, ChevronUp } from "lucide-react";
+import { Mic, MicOff, AlertCircle, Settings, ChevronDown, ChevronUp, Check, ExternalLink } from "lucide-react";
 
 type RecordingError = "no_token" | "api_error" | "ws_error" | "capture_failed";
 
 const ERROR_MESSAGES: Record<RecordingError, string> = {
-  no_token: "No access token set — expand Settings below to add one.",
-  api_error: "Could not reach the MeetBuddy server.",
-  ws_error: "Lost connection to the server.",
+  no_token:       "No access token set. Open Settings to add one.",
+  api_error:      "Could not reach the MeetBuddy server.",
+  ws_error:       "Lost connection to the server.",
   capture_failed: "Could not capture tab audio.",
 };
 
-const CHUNK_MS = 5_000;
+const CHUNK_MS   = 5_000;
 const DEFAULT_API = "http://localhost:8000";
+const WAVE_DELAYS = [0, 140, 70, 210, 105];
 
 export default function SidePanel() {
-  const [recording, setRecording] = useState(false);
-  const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [onMeet, setOnMeet] = useState(false);
-  const [error, setError] = useState<RecordingError | null>(null);
+  const [recording, setRecording]       = useState(false);
+  const [meetingId, setMeetingId]       = useState<string | null>(null);
+  const [onMeet, setOnMeet]             = useState(false);
+  const [error, setError]               = useState<RecordingError | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API);
-  const [token, setToken] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [apiUrl, setApiUrl]             = useState(DEFAULT_API);
+  const [token, setToken]               = useState("");
+  const [saved, setSaved]               = useState(false);
   const [audioDevices, setAudioDevices] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
 
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef       = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const seqRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const bgPortRef = useRef<chrome.runtime.Port | null>(null);
-  const micPortRef = useRef<chrome.runtime.Port | null>(null);
+  const audioElRef  = useRef<HTMLAudioElement | null>(null);
+  const chunksRef   = useRef<Blob[]>([]);
+  const seqRef      = useRef(0);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bgPortRef   = useRef<chrome.runtime.Port | null>(null);
+  const micPortRef  = useRef<chrome.runtime.Port | null>(null);
 
-  // Load settings and detect Meet tab on mount
   useEffect(() => {
     chrome.storage.local.get(["accessToken", "apiUrl", "meetTabReady", "audioDeviceId"], (s) => {
-      if (s.accessToken) setToken(s.accessToken as string);
-      if (s.apiUrl) setApiUrl(s.apiUrl as string);
+      if (s.accessToken)   setToken(s.accessToken as string);
+      if (s.apiUrl)        setApiUrl(s.apiUrl as string);
       if (s.audioDeviceId) setSelectedDeviceId(s.audioDeviceId as string);
       setOnMeet(!!s.meetTabReady);
     });
 
-
-    // Long-lived port so background can push mic chunks forwarded from content script
     const port = chrome.runtime.connect({ name: "sidepanel" });
     bgPortRef.current = port;
     port.onMessage.addListener((msg: { type: string; audio_b64?: string; seq?: number }) => {
@@ -56,7 +54,6 @@ export default function SidePanel() {
       }
     });
 
-    // Poll for stream ID captured during the action click
     chrome.runtime.sendMessage({ type: "GET_PENDING_CAPTURE" }, (resp) => {
       if (resp?.streamId) startRecording(resp.streamId);
     });
@@ -64,7 +61,6 @@ export default function SidePanel() {
     const storageListener = (changes: Record<string, chrome.storage.StorageChange>) => {
       if ("meetTabReady" in changes) setOnMeet(!!changes.meetTabReady.newValue);
     };
-
     const msgListener = (msg: { type: string; streamId?: string }) => {
       if (msg.type === "CAPTURE_READY" && msg.streamId) startRecording(msg.streamId);
     };
@@ -119,16 +115,10 @@ export default function SidePanel() {
 
   async function startRecording(streamId: string) {
     setError(null);
-
     const stored = await chrome.storage.local.get(["accessToken", "apiUrl"]);
     const tok = (stored.accessToken as string | undefined) ?? token;
     const api = (stored.apiUrl as string | undefined) ?? apiUrl;
-
-    if (!tok) {
-      setError("no_token");
-      setShowSettings(true);
-      return;
-    }
+    if (!tok) { setError("no_token"); setShowSettings(true); return; }
 
     let mId: string;
     try {
@@ -137,49 +127,28 @@ export default function SidePanel() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
         body: JSON.stringify({ platform: "google_meet", started_at: new Date().toISOString() }),
       });
-      if (!res.ok) {
-        console.error("[MeetBuddy] createMeeting:", res.status, await res.text());
-        setError("api_error");
-        return;
-      }
+      if (!res.ok) { setError("api_error"); return; }
       mId = (await res.json()).id;
-    } catch (e) {
-      console.error("[MeetBuddy] createMeeting network error:", e);
-      setError("api_error");
-      return;
-    }
+    } catch { setError("api_error"); return; }
 
-    // Tab audio capture (remote participants)
     let stream: MediaStream;
     try {
       const tabStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId },
-        } as MediaTrackConstraints,
+        audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } } as MediaTrackConstraints,
         video: false,
       });
-
-      // Play tab audio through <audio> element so user can still hear the meeting
       const audioEl = new Audio();
       audioEl.srcObject = tabStream;
       audioEl.play().catch(() => {});
       audioElRef.current = audioEl;
-
-      // Mix tab + mic into one stream via AudioContext → one MediaRecorder → clean audio file
       const ctx = new AudioContext();
       await ctx.resume();
       audioCtxRef.current = ctx;
       const dest = ctx.createMediaStreamDestination();
       ctx.createMediaStreamSource(tabStream).connect(dest);
-
       streamRef.current = new MediaStream([...tabStream.getTracks()]);
-
       stream = dest.stream;
-    } catch (e: any) {
-      console.error("[MeetBuddy] getUserMedia:", e?.name, e?.message);
-      setError("capture_failed");
-      return;
-    }
+    } catch { setError("capture_failed"); return; }
 
     const wsBase = api.replace(/^http/, "ws");
     const ws = new WebSocket(`${wsBase}/api/v1/ws/${mId}`);
@@ -195,7 +164,6 @@ export default function SidePanel() {
       setMeetingId(mId);
       setRecording(true);
 
-      // Connect to content script for mic capture — small delay lets the freshly injected script register
       setTimeout(() => chrome.tabs.query({ url: "https://meet.google.com/*" }, (tabs) => {
         const tab = tabs.find((t) => t.id && t.status === "complete");
         if (!tab?.id) return;
@@ -210,9 +178,7 @@ export default function SidePanel() {
           });
           micPort.postMessage({ type: "LIST_DEVICES" });
           micPort.postMessage({ type: "START_MIC", deviceId: selectedDeviceId || undefined });
-        } catch (e) {
-          console.warn("[MeetBuddy] could not connect to content script for mic:", e);
-        }
+        } catch (e) { console.warn("[MeetBuddy] mic:", e); }
       }), 500);
     };
 
@@ -221,101 +187,127 @@ export default function SidePanel() {
   }
 
   function saveSettings() {
-    chrome.storage.local.set({ accessToken: token, apiUrl: apiUrl, audioDeviceId: selectedDeviceId }, () => {
+    chrome.storage.local.set({ accessToken: token, apiUrl, audioDeviceId: selectedDeviceId }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     });
   }
 
+  const S = { padding: "0", margin: "0" } as const;
+
   return (
-    <div className="p-4 font-sans text-sm min-h-screen flex flex-col">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="font-bold">MeetBuddy</span>
+    <div style={{ minHeight: "100vh", background: "#0c0c0e", color: "#ededed", display: "flex", flexDirection: "column" }}>
+
+      {/* Nav */}
+      <div style={{ padding: "11px 14px", borderBottom: "1px solid #1e1e20", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 20, height: 20, borderRadius: 4, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+            <rect x="6" y="4" width="4" height="16" rx="1" fill="white" />
+            <rect x="14" y="4" width="4" height="16" rx="1" fill="white" />
+          </svg>
+        </div>
+        <span style={{ fontWeight: 600, fontSize: 13 }}>MeetBuddy</span>
+        <a
+          href="http://localhost:3000/meetings"
+          target="_blank"
+          rel="noreferrer"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#555", textDecoration: "none" }}
+        >
+          Dashboard <ExternalLink style={{ width: 10, height: 10 }} />
+        </a>
       </div>
 
-
-      {recording ? (
-        <div>
-          <div className="flex items-center gap-2 text-green-600 mb-3">
-            <Mic className="w-4 h-4 animate-pulse" />
-            <span className="font-medium">Recording...</span>
-          </div>
-          <p className="text-xs text-gray-500 mb-4">
-            Audio is being captured locally and will be processed after the meeting.
-          </p>
-          <button
-            onClick={cleanup}
-            className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-md text-xs font-medium hover:bg-red-200"
-          >
-            <MicOff className="w-3.5 h-3.5" />
-            Stop recording
-          </button>
-        </div>
-      ) : (
-        <div>
-          <div className="flex items-center gap-2 text-gray-400 mb-4">
-            <MicOff className="w-4 h-4" />
-            <span>Not recording</span>
-          </div>
-
-          {error && (
-            <div className="flex items-start gap-2 text-amber-700 bg-amber-50 rounded-md p-2.5 mb-3 text-xs">
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span>{ERROR_MESSAGES[error]}</span>
+      {/* Body */}
+      <div style={{ flex: 1, padding: "16px 14px" }}>
+        {recording ? (
+          /* ── Recording ── */
+          <div className="animate-fade-in-up" style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 20 }}>
+            {/* Waveform */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 20, marginBottom: 14 }}>
+              {WAVE_DELAYS.map((delay, i) => (
+                <div key={i} className="wave-bar" style={{ animationDelay: `${delay}ms` }} />
+              ))}
             </div>
-          )}
 
-          {onMeet && !error && (
-            <p className="text-xs text-blue-600 bg-blue-50 rounded-md p-2.5 mb-3">
-              Click the <strong>MeetBuddy extension icon</strong> in the toolbar to start recording.
+            {/* Status */}
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+              <div className="blink-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#22c55e" }}>Recording</span>
+            </div>
+
+            {meetingId && (
+              <p style={{ fontSize: 10, color: "#444", fontFamily: "monospace", marginBottom: 18 }}>
+                {meetingId.slice(0, 8)}…
+              </p>
+            )}
+
+            <p style={{ fontSize: 11, color: "#555", textAlign: "center", lineHeight: 1.65, marginBottom: 20, maxWidth: 200 }}>
+              Audio is being captured locally and will be processed after the meeting ends.
             </p>
-          )}
 
-          {!onMeet && (
-            <p className="text-xs text-gray-400">Join a Google Meet to start recording.</p>
-          )}
-        </div>
-      )}
+            <button className="btn-danger" onClick={cleanup}>
+              <MicOff style={{ width: 12, height: 12 }} />
+              Stop recording
+            </button>
+          </div>
+        ) : (
+          /* ── Idle ── */
+          <div className="animate-fade-in-up">
+            {/* Error */}
+            {error && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", borderRadius: 6, marginBottom: 12, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b", fontSize: 11, lineHeight: 1.55 }}>
+                <AlertCircle style={{ width: 12, height: 12, marginTop: 1, flexShrink: 0 }} />
+                {ERROR_MESSAGES[error]}
+              </div>
+            )}
+
+            {/* Status card */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px", borderRadius: 8, background: "#111113", border: "1px solid #222224", textAlign: "center" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a1a1c", border: "1px solid #262629", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                <MicOff style={{ width: 16, height: 16, color: "#3a3a3e" }} />
+              </div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "#666", marginBottom: 6 }}>Not recording</p>
+              {onMeet ? (
+                <p style={{ fontSize: 11, color: "#4a4a4e", lineHeight: 1.6, maxWidth: 190 }}>
+                  Click the <strong style={{ color: "#666" }}>MeetBuddy icon</strong> in the Chrome toolbar to start.
+                </p>
+              ) : (
+                <p style={{ fontSize: 11, color: "#3e3e42", lineHeight: 1.6 }}>
+                  Join a Google Meet to start recording.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Settings */}
-      <div className="mt-auto pt-4 border-t border-gray-100">
+      <div style={{ borderTop: "1px solid #1e1e20", padding: "10px 14px" }}>
         <button
           onClick={() => setShowSettings((s) => !s)}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#555", background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%", fontFamily: "inherit" }}
         >
-          <Settings className="w-3.5 h-3.5" />
+          <Settings style={{ width: 12, height: 12 }} />
           Settings
-          {showSettings ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          <span style={{ marginLeft: "auto" }}>
+            {showSettings ? <ChevronUp style={{ width: 11, height: 11 }} /> : <ChevronDown style={{ width: 11, height: 11 }} />}
+          </span>
         </button>
 
         {showSettings && (
-          <div className="mt-3 space-y-2">
+          <div className="animate-fade-in-up" style={{ marginTop: 11, display: "flex", flexDirection: "column", gap: 9 }}>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">API URL</label>
-              <input
-                value={apiUrl}
-                onChange={(e) => setApiUrl(e.target.value)}
-                className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <label className="field-label">API URL</label>
+              <input className="ext-input" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Access Token</label>
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Paste your API token"
-                className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <label className="field-label">Access Token</label>
+              <input type="password" className="ext-input" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your API token" />
             </div>
             {audioDevices.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Microphone</label>
-                <select
-                  value={selectedDeviceId}
-                  onChange={(e) => setSelectedDeviceId(e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                >
+                <label className="field-label">Microphone</label>
+                <select className="ext-input" value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)}>
                   <option value="">Default microphone</option>
                   {audioDevices.map((d) => (
                     <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
@@ -323,15 +315,13 @@ export default function SidePanel() {
                 </select>
               </div>
             )}
-            <button
-              onClick={saveSettings}
-              className="w-full bg-blue-600 text-white rounded py-1.5 text-xs font-medium hover:bg-blue-700"
-            >
-              {saved ? "Saved!" : "Save"}
+            <button className="btn-primary" onClick={saveSettings}>
+              {saved ? <><Check style={{ width: 12, height: 12 }} /> Saved</> : "Save"}
             </button>
           </div>
         )}
       </div>
+
     </div>
   );
 }

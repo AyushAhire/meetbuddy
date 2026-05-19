@@ -1,3 +1,154 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  background: #0c0c0e;
+  color: #ededed;
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+}
+
+/* ── Keyframes ── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wave-bar {
+  0%, 100% { height: 3px; opacity: 0.4; }
+  50%       { height: 14px; opacity: 1; }
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Layout helpers ── */
+.animate-fade-in-up { animation: fade-in-up 0.3s ease-out both; }
+
+/* ── Surface ── */
+.surface {
+  background: #111113;
+  border: 1px solid #222224;
+  border-radius: 6px;
+}
+
+/* ── Inputs ── */
+.ext-input {
+  width: 100%;
+  background: #111113;
+  border: 1px solid #222224;
+  color: #ededed;
+  border-radius: 5px;
+  font-size: 12px;
+  padding: 6px 9px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+.ext-input:focus {
+  outline: none;
+  border-color: rgba(99,102,241,0.55);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+.ext-input::placeholder { color: #4a4a4e; }
+.ext-input option { background: #111113; }
+
+/* Override browser autofill white flash */
+.ext-input:-webkit-autofill,
+.ext-input:-webkit-autofill:hover,
+.ext-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ededed !important;
+  -webkit-box-shadow: 0 0 0 1000px #111113 inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: #ededed;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 5px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  font-family: inherit;
+  width: 100%;
+}
+.btn-primary:hover { background: #5558e3; }
+.btn-primary:active { transform: scale(0.98); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid #222224;
+  color: #888;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+.btn-ghost:hover { background: #1a1a1c; color: #ededed; border-color: #333; }
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.22);
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 5px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.btn-danger:hover { background: rgba(239,68,68,0.15); }
+
+/* ── Labels ── */
+.field-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+/* ── Waveform ── */
+.wave-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #22c55e;
+  animation: wave-bar 0.7s ease-in-out infinite;
+}
+
+.blink-dot { animation: blink-dot 1.4s ease-in-out infinite; }
+
+/* ── Divider ── */
+.divider { border: none; border-top: 1px solid #1e1e20; margin: 0; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #222224; border-radius: 2px; }
