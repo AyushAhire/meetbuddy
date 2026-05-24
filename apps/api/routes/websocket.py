@@ -1,6 +1,8 @@
 """WebSocket endpoint for live extension → server communication during recording."""
+import asyncio
 import base64
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -10,8 +12,8 @@ from models.meeting import Meeting
 from utils.storage import upload_file
 
 router = APIRouter(tags=["websocket"])
+logger = logging.getLogger(__name__)
 
-# Separate tab (remote participants) and mic (local speaker) streams per meeting
 AUDIO_CHUNK_STORE: dict[str, dict[str, list[bytes]]] = {}
 
 
@@ -30,7 +32,8 @@ async def meeting_ws(websocket: WebSocket, meeting_id: uuid.UUID):
 
             if msg.get("type") == "chunk":
                 audio_bytes = base64.b64decode(msg["audio_b64"])
-                source = msg.get("source", "tab")  # "tab" | "mic"
+                source = msg.get("source", "tab")
+                # "mixed" falls back to the "tab" bucket
                 bucket = AUDIO_CHUNK_STORE[key].get(source, AUDIO_CHUNK_STORE[key]["tab"])
                 bucket.append(audio_bytes)
 
@@ -44,21 +47,30 @@ async def meeting_ws(websocket: WebSocket, meeting_id: uuid.UUID):
         streams = AUDIO_CHUNK_STORE.pop(key, {"tab": [], "mic": []})
         if streams["tab"] or streams["mic"]:
             await _finalize_recording(meeting_id, streams)
+    except Exception:
+        logger.exception("Unexpected error in WebSocket handler for meeting %s", meeting_id)
+        AUDIO_CHUNK_STORE.pop(key, None)
 
 
 async def _finalize_recording(meeting_id: uuid.UUID, streams: dict[str, list[bytes]]) -> None:
     tab_data = b"".join(streams.get("tab", []))
     mic_data = b"".join(streams.get("mic", []))
 
+    logger.info(
+        "Finalizing meeting %s — tab=%d bytes mic=%d bytes",
+        meeting_id, len(tab_data), len(mic_data),
+    )
+
     if not tab_data and not mic_data:
+        logger.warning("Meeting %s has no audio data — skipping pipeline", meeting_id)
         return
 
+    # Upload runs synchronously in a thread so it doesn't block the event loop.
     if tab_data:
-        upload_file(f"audio/{meeting_id}/tab.webm", tab_data, "audio/webm")
+        await asyncio.to_thread(upload_file, f"audio/{meeting_id}/tab.webm", tab_data, "audio/webm")
     if mic_data:
-        upload_file(f"audio/{meeting_id}/mic.webm", mic_data, "audio/webm")
+        await asyncio.to_thread(upload_file, f"audio/{meeting_id}/mic.webm", mic_data, "audio/webm")
 
-    # audio_url points to tab stream (primary); pipeline also checks for mic stream
     primary_key = f"audio/{meeting_id}/tab.webm" if tab_data else f"audio/{meeting_id}/mic.webm"
 
     async with AsyncSessionFactory() as db:
@@ -68,5 +80,9 @@ async def _finalize_recording(meeting_id: uuid.UUID, streams: dict[str, list[byt
             meeting.status = "processing"
             await db.commit()
 
-    from tasks.pipeline import process_meeting
-    process_meeting(str(meeting_id))
+    try:
+        from tasks.pipeline import process_meeting
+        await asyncio.to_thread(process_meeting, str(meeting_id))
+        logger.info("Queued pipeline for meeting %s", meeting_id)
+    except Exception:
+        logger.exception("Failed to queue Celery pipeline for meeting %s", meeting_id)

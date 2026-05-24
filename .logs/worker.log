@@ -1,0 +1,124 @@
+ 
+ -------------- celery@server v5.6.3 (recovery)
+--- ***** ----- 
+-- ******* ---- Linux-6.14.0-37-generic-x86_64-with-glibc2.41 2026-05-20 00:15:55
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         meetbuddy:0x7af79d4bb110
+- ** ---------- .> transport:   redis://localhost:6379/0
+- ** ---------- .> results:     redis://localhost:6379/0
+- *** --- * --- .> concurrency: 2 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . tasks.extract_insights_task
+  . tasks.mark_complete
+  . tasks.store_and_embed_chunks
+  . tasks.transcribe_audio
+
+[2026-05-20 00:15:55,161: INFO/MainProcess] Connected to redis://localhost:6379/0
+[2026-05-20 00:15:55,167: INFO/MainProcess] mingle: searching for neighbors
+[2026-05-20 00:15:56,185: INFO/MainProcess] mingle: all alone
+[2026-05-20 00:15:56,195: INFO/MainProcess] celery@server ready.
+[2026-05-20 00:20:02,164: INFO/MainProcess] Task tasks.transcribe_audio[de4993f3-ad5a-4cd3-9d49-002b7f3aa37b] received
+[2026-05-20 00:20:02,170: ERROR/ForkPoolWorker-1] Task tasks.transcribe_audio[de4993f3-ad5a-4cd3-9d49-002b7f3aa37b] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 42, in transcribe_audio
+    from services.transcription import store_transcript, transcribe_audio_file
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 00:20:28,167: INFO/MainProcess] Task tasks.extract_insights_task[fcb6a5b0-8821-4c91-b813-79f6151e9667] received
+[2026-05-20 00:20:28,169: ERROR/ForkPoolWorker-1] Task tasks.extract_insights_task[fcb6a5b0-8821-4c91-b813-79f6151e9667] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 134, in extract_insights_task
+    from services.llm import extract_insights
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 00:23:16,577: INFO/MainProcess] Task tasks.store_and_embed_chunks[90777756-b826-4139-997e-ddaedc96116e] received
+[2026-05-20 00:23:16,581: ERROR/ForkPoolWorker-1] Task tasks.store_and_embed_chunks[90777756-b826-4139-997e-ddaedc96116e] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 91, in store_and_embed_chunks
+    from services.transcription import embed_texts
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 00:24:01,434: INFO/MainProcess] Task tasks.store_and_embed_chunks[04f03c89-0dda-4a89-9a80-9b3dee7ae4b9] received
+[2026-05-20 00:24:01,438: ERROR/ForkPoolWorker-1] Task tasks.store_and_embed_chunks[04f03c89-0dda-4a89-9a80-9b3dee7ae4b9] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 91, in store_and_embed_chunks
+    from services.transcription import embed_texts
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 00:31:09,703: INFO/MainProcess] Task tasks.transcribe_audio[7fc2255f-7b1b-4866-9a44-d1a8263497aa] received
+[2026-05-20 00:31:09,716: ERROR/ForkPoolWorker-1] Task tasks.transcribe_audio[7fc2255f-7b1b-4866-9a44-d1a8263497aa] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 42, in transcribe_audio
+    from services.transcription import store_transcript, transcribe_audio_file
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 00:31:14,418: INFO/MainProcess] Task tasks.store_and_embed_chunks[c24c65b5-ac82-4774-a5a3-7f8d29955052] received
+[2026-05-20 00:31:14,420: ERROR/ForkPoolWorker-1] Task tasks.store_and_embed_chunks[c24c65b5-ac82-4774-a5a3-7f8d29955052] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 91, in store_and_embed_chunks
+    from services.transcription import embed_texts
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 10:03:03,887: INFO/MainProcess] Task tasks.extract_insights_task[78223961-2c09-43aa-9a4a-78e832f4ebb8] received
+[2026-05-20 10:03:03,893: ERROR/ForkPoolWorker-1] Task tasks.extract_insights_task[78223961-2c09-43aa-9a4a-78e832f4ebb8] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 134, in extract_insights_task
+    from services.llm import extract_insights
+ModuleNotFoundError: No module named 'services'
+[2026-05-20 10:43:14,527: INFO/MainProcess] Task tasks.transcribe_audio[3509e247-edd3-4e2f-a8d8-3ddc3af56681] received
+[2026-05-20 10:43:14,532: ERROR/ForkPoolWorker-1] Task tasks.transcribe_audio[3509e247-edd3-4e2f-a8d8-3ddc3af56681] raised unexpected: ModuleNotFoundError("No module named 'services'")
+Traceback (most recent call last):
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 585, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/.venv/lib/python3.11/site-packages/celery/app/trace.py", line 858, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anon/meetbuddy/apps/api/tasks/pipeline.py", line 42, in transcribe_audio
+    yield session
+ModuleNotFoundError: No module named 'services'
+
+worker: Warm shutdown (MainProcess)
