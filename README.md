@@ -8,7 +8,7 @@
 
 MeetBuddy captures Google Meet audio directly in the browser — no bot joins your call, no third-party server sees your audio. A Chrome extension mixes tab audio (remote participants) and your microphone into a single stream, ships it to a local FastAPI server over WebSocket, and a Celery pipeline transcribes, embeds, and summarizes the meeting automatically.
 
-**Your meeting data never leaves your machine unless you choose a cloud LLM.**
+**Your meeting data never leaves your machine unless you choose a Cloud LLM.**
 
 ---
 
