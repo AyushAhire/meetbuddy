@@ -6,25 +6,70 @@ A complete walkthrough of the codebase, written to help you learn the full syste
 
 ## What This App Does
 
-MeetBuddy automatically records your Google Meet calls, transcribes the audio, extracts insights (summary, action items, decisions), and lets you search across all your past meetings using plain English questions.
+MeetBuddy automatically records your meetings, transcribes the audio, extracts insights (summary, action items, decisions), and lets you search across all your past meetings using plain English questions.
 
-**Three moving parts:**
-1. **Chrome Extension** — captures audio during a live meeting
-2. **FastAPI backend** — processes the audio and stores everything
-3. **Next.js web app** — shows you the results and lets you query them
+**Four moving parts:**
+1. **Desktop tray app** — the primary way to capture audio, using PipeWire at the OS level
+2. **Chrome extension** — secondary capture option, captures audio inside the browser tab
+3. **FastAPI backend** — processes the audio and stores everything
+4. **Next.js web app** — shows you the results and lets you query them
 
 ---
 
 ## System Architecture Overview
 
+There are two audio capture paths. Both feed the same backend pipeline.
+
+### Path A — Desktop tray app (primary)
+
 ```
-Chrome Extension (background.ts)
-  │  detects Google Meet tab
-  │  captures tab audio via MediaRecorder
-  │  streams chunks via WebSocket every 5 seconds
-  ▼
+PipeWire (Linux audio)
+  ├─ mic input  (your voice)
+  └─ sink monitor  (all speaker output — remote participants)
+        │  pw-record subprocess
+        ▼
+capture.py daemon  (Python, port 7779)
+  │  mixes PCM streams, writes WAV
+  │  HTTP API: /start  /stop  /status
+        │
+   ┌────┴─────────────────┐
+   │                      │
+tray.py (GUI)      web dashboard
+ pystray +          RecordingControl
+ pywebview          component
+        │
+        ▼
+FastAPI  POST /api/v1/upload/audio
+FastAPI  POST /api/v1/upload/complete
+        │
+        ▼
+   Celery pipeline
+```
+
+### Path B — Chrome extension (secondary)
+
+```
+Google Meet tab
+  ├─ chrome.tabCapture → offscreen document
+  │      MediaRecorder (audio/webm;codecs=opus)
+  │      base64 chunks every 5 s
+  └─ getUserMedia → content script (mic)
+         MediaRecorder chunks
+              │
+              ▼
+  background.ts (service worker)
+         relays chunks via port to sidepanel
+              │
+              ▼
+  sidepanel.tsx
+         WebSocket to FastAPI /api/v1/ws/{meeting_id}
+```
+
+### Shared backend pipeline
+
+```
 FastAPI API (main.py)  ←→  PostgreSQL (with pgvector)
-  │  receives audio chunks                ↑
+  │  receives audio                       ↑
   │  stores audio in MinIO             models
   │  triggers Celery pipeline              │
   ▼                                        │
@@ -399,48 +444,138 @@ Built with [Plasmo](https://docs.plasmo.com/), a framework for Chrome extensions
 
 ### `background.ts` — The Service Worker
 
-This is the brain of the extension. It runs persistently in the background.
+This is the brain of the extension. It tracks the active Google Meet tab and orchestrates capture.
 
 **Tab detection:**
 ```typescript
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.url && MEET_PATTERN.test(tab.url)) {
-    handleMeetTabOpened(tabId);
+    disablePopupForTab(tabId);
+    chrome.storage.local.set({ meetTabReady: true });
   }
 });
 ```
 
-When a Google Meet URL fully loads, it automatically starts recording.
+**Recording flow (user clicks the extension icon):**
+1. `chrome.tabCapture.getMediaStreamId` — gets a stream ID for the Meet tab's audio
+2. Opens an offscreen document and sends it the stream ID (`OFFSCREEN_START`)
+3. Sends `START_MIC` to the content script in the Meet tab
+4. The sidepanel WebSocket connection sends chunks to the API
 
-**Recording flow:**
-1. `handleMeetTabOpened` — gets auth token from `chrome.storage.local`, calls API to create a meeting record, calls `startRecording`
-2. `startRecording` — uses `chrome.tabCapture.getMediaStreamId` to get permission to capture the tab's audio, then creates a `MediaRecorder` with `audio/webm;codecs=opus`
-3. Opens a WebSocket connection to the backend
-4. `setInterval(flushChunk, 5000)` — every 5 seconds, converts buffered audio blobs to base64 and sends over WebSocket
-5. `stopRecording` — flushes remaining audio, sends `{"type": "stop"}`, closes WebSocket
+**Why mic capture lives in the content script, not the offscreen document:**
+In Chrome MV3, `getUserMedia` for the microphone only works reliably in contexts where the user has already granted permission. The Google Meet tab is such a context (Meet itself already has mic permission). The offscreen document is a background context that doesn't inherit this permission. So mic capture was moved to `content.ts`.
 
-**Communication with other extension pages:**
-```typescript
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "STOP_RECORDING") stopRecording("user requested");
-});
-```
+**Message relay**: background.ts acts as a message bus — `MIC_CHUNK` and `OFFSCREEN_CHUNK` messages from the content script and offscreen doc are forwarded to the sidepanel via a persistent port.
 
 ### `content.ts` — The Content Script
 
-Injected into every `meet.google.com` page. Watches the DOM for participant tile elements using a `MutationObserver`. When participants change, it waits 2 seconds (debounce), extracts names, and sends them to the background service worker. Used for speaker diarization (Phase 2).
+Injected into every `meet.google.com` page. Has two jobs:
 
-### `popup/index.tsx` — Settings Popup
+**1. Mic capture** — when it receives `START_MIC` from the background, it calls `getUserMedia` and starts a `MediaRecorder`. Audio chunks are base64-encoded and sent to the background as `MIC_CHUNK` messages every 5 seconds. Stops when it receives `STOP_MIC`.
 
-A small React form that saves two values to `chrome.storage.local`:
-- `apiUrl` — which backend to talk to
-- `accessToken` — the JWT to authenticate with
+```typescript
+async function startMic(micDeviceId?: string) {
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: constraints, video: false });
+  micRecorder = new MediaRecorder(micStream, { mimeType: "audio/webm;codecs=opus" });
+  micRecorder.ondataavailable = (e) => { /* base64 encode + sendMessage */ };
+  micRecorder.start(5_000);
+}
+```
 
-This is how the extension knows who you are. You paste your token from the web app.
+**2. Participant detection** — watches the DOM for participant tile elements using a `MutationObserver`. Extracts names for speaker diarization (Phase 2, not yet fully wired).
 
-### `sidepanel/index.tsx` — Side Panel UI
+### `tabs/offscreen.tsx` — The Offscreen Document
 
-Shows recording status during a meeting. Listens to `chrome.storage.onChanged` — whenever `recordingState` changes in storage (the background sets it when recording starts/stops), the UI updates automatically. Has a "Stop recording" button that sends `STOP_RECORDING` to the background.
+A hidden document that captures the **tab audio** (remote participants) using the stream ID from `tabCapture`. This is the only MV3 context where `getUserMedia` with `chromeMediaSource: "tab"` works. Sends `OFFSCREEN_CHUNK` messages to background every 5 seconds. Does not handle mic — that's `content.ts`'s job.
+
+### `sidepanel.tsx` — Side Panel UI
+
+The main user-facing UI. Opens in Chrome's side panel when the extension icon is clicked on a Meet tab.
+
+- Connects to background via a persistent port (survives page navigations)
+- Listens for `OFFSCREEN_CHUNK` and forwards each chunk over WebSocket to the API
+- Shows `MIC_STATUS` — green "Mic + Speaker" if mic is active, amber "Speaker only" if mic failed
+- Handles recording state via `chrome.storage.local` so it survives being closed and reopened mid-recording
+
+---
+
+## Desktop Capture (`apps/capture/` and `apps/tray/`)
+
+### `capture.py` — The PipeWire Daemon
+
+A self-contained Python script that captures audio using PipeWire's `pw-record` command-line tool. It runs as a background daemon and exposes a tiny HTTP API on port 7779.
+
+**Why PipeWire instead of the browser?**
+`chrome.tabCapture` in MV3 is brittle — it requires clicking the extension icon on the exact right tab, and mic capture via `getUserMedia` is unreliable in background extension contexts. PipeWire captures audio at the OS level: it sees everything that goes through your mic and speakers, regardless of which app is making the sound.
+
+**How the recording works:**
+```python
+async def record_node(node: str, q: asyncio.Queue, stop: asyncio.Event):
+    proc = await asyncio.create_subprocess_exec(
+        "pw-record", "--target", node,
+        "--format", "s16", "--rate", "16000", "--channels", "1", "-",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    # reads 200ms chunks and puts them on the queue
+```
+
+Two `pw-record` processes run simultaneously — one targeting the mic node, one targeting the speaker sink (which PipeWire automatically monitors). Their raw PCM streams are mixed with saturating addition:
+
+```python
+def mix_s16le(a: bytes, b: bytes) -> bytes:
+    arr_a = array.array("h", a)
+    arr_b = array.array("h", b)
+    return bytes(array.array("h", (
+        max(-32768, min(32767, x + y)) for x, y in zip(arr_a, arr_b)
+    )))
+```
+
+**Daemon HTTP API (port 7779):**
+| Path | Method | Description |
+|---|---|---|
+| `/status` | GET | Returns recording state, elapsed time, file size |
+| `/start` | POST | `{"token": "<jwt>", "api": "<url>"}` — starts recording |
+| `/stop` | POST | Stops recording and triggers upload |
+
+**BT sink hot-plugging**: every 5 seconds the daemon re-scans for new Bluetooth sinks (Bluetooth audio devices that connect mid-call switch PipeWire nodes, and this ensures they're captured automatically).
+
+**CLI modes:**
+```bash
+python3 capture.py --daemon         # run as daemon on :7779
+python3 capture.py --token <jwt>    # one-shot recording
+python3 capture.py --list           # show available PipeWire nodes
+python3 capture.py --start          # tell running daemon to start
+python3 capture.py --stop           # tell running daemon to stop
+python3 capture.py --status         # show daemon recording status
+```
+
+### `tray.py` — The Desktop App
+
+A system tray app that wraps the capture daemon with a native GUI. Uses two libraries:
+
+- **pystray** — puts an icon in the system tray (xorg backend for Linux Wayland+Xwayland compatibility)
+- **pywebview** — opens a native WebKit window containing a self-contained HTML/CSS/JS app
+
+**Threading model:**
+`webview.start()` must run on the main thread (GTK requirement on Linux). `pystray` has a `run_detached()` method that puts it in a background thread. So the startup looks like:
+
+```python
+def run(self):
+    self._window = webview.create_window("MeetBuddy", html=HTML, js_api=self._api, ...)
+    self._icon.run_detached()     # pystray → background thread
+    webview.start(func=_hide_on_start)  # GTK event loop → main thread
+```
+
+**The JS bridge**: Python methods are exposed to the in-window JavaScript via `js_api`. The HTML app calls them like:
+```javascript
+const status = await window.pywebview.api.get_status();
+const meetings = await window.pywebview.api.get_meetings();
+await window.pywebview.api.start_recording();
+```
+
+This means the window's JS can read config, control the daemon, and fetch meetings from the API — all through Python, avoiding CORS issues entirely.
+
+**Window lifecycle**: the window is created hidden on startup. Left-clicking the tray icon calls `window.show()` / `window.hide()` to toggle it. The tray icon itself changes color (purple = idle, red = recording) based on a background poll thread that checks the daemon every 2 seconds.
 
 ---
 
@@ -499,31 +634,51 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 ## Data Flow: End to End
 
-Here's what happens from you joining a Google Meet to being able to ask "what did we decide?":
+Here's what happens from clicking Record to being able to ask "what did we decide?":
+
+### Via tray app (Path A)
 
 ```
-1. You open meet.google.com
-   → Extension detects the URL
-   → Creates meeting record via POST /api/v1/meetings
-   → Captures tab audio with MediaRecorder
+1. You click the tray icon → app window opens → click the mic button
+   → capture.py creates a meeting via POST /api/v1/meetings
+   → Two pw-record subprocesses start: one for mic, one for speaker monitor
+
+2. While the meeting runs
+   → PCM chunks buffered every 200ms, mixed in real time
+   → WAV file grows on disk (capped at 23 MB)
+
+3. You click Stop
+   → Daemon finalizes the WAV file
+   → POST /api/v1/upload/audio  (uploads the file)
+   → POST /api/v1/upload/complete  (triggers pipeline)
+```
+
+### Via Chrome extension (Path B)
+
+```
+1. You open meet.google.com and click the extension icon
+   → background.ts calls chrome.tabCapture.getMediaStreamId
+   → Offscreen document records tab audio (remote participants)
+   → content.ts records mic audio (you) via getUserMedia
 
 2. Every 5 seconds while meeting runs
-   → Audio chunks sent as base64 over WebSocket
+   → Both streams send base64 WebM chunks over WebSocket
    → Server buffers them in memory
 
-3. Meeting ends (tab closes or you click Stop)
+3. You click Stop
    → Extension sends {"type": "stop"}
-   → Server concatenates all audio bytes
-   → Uploads to MinIO: audio/<uuid>/recording.webm
-   → Sets meeting.status = "processing"
-   → Fires process_meeting(meeting_id) into Celery queue
+   → Server concatenates chunks, uploads to MinIO, triggers pipeline
+```
 
+### Shared pipeline (both paths)
+
+```
 4. Celery worker picks up the job
    Step 1 — Transcription:
      Downloads audio from MinIO
      Runs faster-whisper (speech-to-text)
      Uploads transcript JSON to MinIO
-   
+
    Step 2 — Embedding:
      Downloads transcript JSON
      Runs each segment through nomic-embed-text
@@ -537,17 +692,16 @@ Here's what happens from you joining a Google Meet to being able to ask "what di
 
    Step 4 — Mark done:
      meeting.status = "done"
+     (any step that exhausts 3 retries sets status = "failed")
 
 5. You open the web app → /meetings
-   → Sees the meeting listed as "done"
-   → Clicks it → sees summary, action items, decisions
+   → Meeting listed as "done" → click it → see summary + action items
 
 6. You go to /query and type "what did we decide about pricing?"
-   → Web app POSTs {"q": "what did we decide about pricing?"}
    → API embeds your question (same 768-dim model)
    → PostgreSQL cosine similarity search finds top 8 chunks
-   → Those chunks become context for the LLM
-   → LLM answers grounded in your real meeting content
+   → Those chunks become LLM context
+   → LLM answers grounded in your actual meeting content
    → You see the answer with links to source meetings
 ```
 
@@ -557,6 +711,9 @@ Here's what happens from you joining a Google Meet to being able to ask "what di
 
 | Technology | Why |
 |---|---|
+| **PipeWire / pw-record** | OS-level audio capture — works with any app, not just browser tabs |
+| **pystray** | Cross-platform system tray icon; xorg backend used on Linux for Wayland+Xwayland compat |
+| **pywebview** | Wraps a native WebKit window around HTML/CSS/JS — desktop app feel without Electron's weight |
 | **FastAPI** | Async Python web framework — handles many requests concurrently without threads |
 | **SQLAlchemy async** | Async ORM — database calls don't block the event loop |
 | **Alembic** | Schema migrations — controlled, versioned database changes |
