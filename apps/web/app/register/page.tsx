@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { authApi } from "@/lib/api";
+import { Logo } from "@/app/components/logo";
 
 const registerSchema = z.object({
   name: z.string().min(1),
@@ -39,15 +40,7 @@ export default function RegisterPage() {
 
         {/* Wordmark */}
         <div className="flex items-center gap-2 justify-center mb-8">
-          <div
-            className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-            style={{ background: "hsl(245 58% 61%)" }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-              <rect x="6" y="4" width="4" height="16" rx="1" fill="white" />
-              <rect x="14" y="4" width="4" height="16" rx="1" fill="white" />
-            </svg>
-          </div>
+          <Logo size={24} />
           <span className="font-semibold text-sm text-foreground tracking-tight">MeetBuddy</span>
         </div>
 

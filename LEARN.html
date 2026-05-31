@@ -376,11 +376,14 @@
   <a href="#prompts">LLM Prompts</a>
   <a href="#search">Semantic Search</a>
   <a href="#storage">Object Storage</a>
+  <a href="#capture">Desktop Capture</a>
+  <a class="sub" href="#capture-daemon">capture.py daemon</a>
+  <a class="sub" href="#tray-app">tray.py app</a>
   <a href="#extension">Chrome Extension</a>
   <a class="sub" href="#bg">background.ts</a>
   <a class="sub" href="#content">content.ts</a>
-  <a class="sub" href="#popup">popup</a>
-  <a class="sub" href="#sidepanel">sidepanel</a>
+  <a class="sub" href="#offscreen">offscreen.tsx</a>
+  <a class="sub" href="#sidepanel">sidepanel.tsx</a>
   <a href="#webapp">Next.js Web App</a>
   <a href="#e2e">End-to-End Flow</a>
   <a href="#tech">Tech Stack</a>
@@ -395,24 +398,57 @@
 
   <!-- ─────────────────────────────── WHAT ─────────────────────────────── -->
   <h2 id="what">What This App Does</h2>
-  <p>MeetBuddy automatically <strong>records your Google Meet calls</strong>, <strong>transcribes the audio</strong>, <strong>extracts insights</strong> (summary, action items, decisions), and lets you <strong>search across all your past meetings</strong> using plain English questions.</p>
+  <p>MeetBuddy automatically <strong>records your meetings</strong>, <strong>transcribes the audio</strong>, <strong>extracts insights</strong> (summary, action items, decisions), and lets you <strong>search across all your past meetings</strong> using plain English questions.</p>
 
-  <p><strong>Three moving parts:</strong></p>
+  <p><strong>Four moving parts:</strong></p>
   <ul>
-    <li><span class="badge badge-purple">Chrome Extension</span> — captures audio during a live meeting</li>
+    <li><span class="badge badge-purple">Desktop Tray App</span> — primary audio capture using PipeWire at the OS level; works with any meeting platform</li>
+    <li><span class="badge badge-purple">Chrome Extension</span> — secondary capture option, grabs audio directly inside the browser tab</li>
     <li><span class="badge badge-teal">FastAPI Backend</span> — processes audio and stores everything</li>
     <li><span class="badge badge-green">Next.js Web App</span> — shows results and lets you query them</li>
   </ul>
 
   <!-- ─────────────────────────────── ARCH ─────────────────────────────── -->
   <h2 id="arch">System Architecture Overview</h2>
-<div class="flow">Chrome Extension (background.ts)
-  │  detects Google Meet tab
-  │  captures tab audio via MediaRecorder
-  │  streams chunks via WebSocket every 5 seconds
-  ▼
-FastAPI API (main.py)  ←→  PostgreSQL (with pgvector)
-  │  receives audio chunks                ↑
+
+  <p>There are two audio capture paths. Both feed the same backend pipeline.</p>
+
+  <h3>Path A — Desktop tray app (primary)</h3>
+<div class="flow">PipeWire (Linux audio)
+  ├─ mic input  (your voice)
+  └─ sink monitor  (all speaker output — remote participants)
+        │  pw-record subprocess
+        ▼
+capture.py daemon  (Python, port 7779)
+  │  mixes PCM streams, writes WAV
+  │  HTTP API: /start  /stop  /status
+        │
+   ┌────┴─────────────────┐
+   │                      │
+tray.py (GUI)      web dashboard
+ pystray +          RecordingControl
+ pywebview           component
+        │
+        ▼
+FastAPI  POST /api/v1/upload/audio
+FastAPI  POST /api/v1/upload/complete  →  Celery pipeline</div>
+
+  <h3>Path B — Chrome extension (secondary)</h3>
+<div class="flow">Google Meet tab
+  ├─ chrome.tabCapture → offscreen document
+  │      MediaRecorder (audio/webm;codecs=opus), chunks every 5 s
+  └─ getUserMedia → content script (mic)
+         MediaRecorder chunks
+              │
+              ▼
+  background.ts  (service worker — relays chunks via port)
+              │
+              ▼
+  sidepanel.tsx  →  WebSocket  →  FastAPI /api/v1/ws/{meeting_id}</div>
+
+  <h3>Shared backend pipeline</h3>
+<div class="flow">FastAPI API (main.py)  ←→  PostgreSQL (with pgvector)
+  │  receives audio                       ↑
   │  stores audio in MinIO             models
   │  triggers Celery pipeline              │
   ▼                                        │
@@ -420,7 +456,7 @@ Celery Worker (tasks/pipeline.py)  ────────┘
   │  transcribes audio (Whisper)
   │  embeds transcript chunks (sentence-transformers)
   │  extracts insights (LLM)
-  │  marks meeting "done"
+  │  marks meeting "done"  (or "failed" after 3 retries)
   ▼
 MinIO (S3-compatible object storage)
   stores: raw audio files, transcript JSON files
@@ -763,44 +799,125 @@ _run(_run_async())
   </ul>
   <p>The client is lazily initialized with a module-level singleton (<code>_client = None</code>).</p>
 
+  <!-- ─────────────────────────────── CAPTURE ─────────────────────────────── -->
+  <h2 id="capture">Desktop Capture — <code>apps/capture/</code> &amp; <code>apps/tray/</code></h2>
+
+  <h3 id="capture-daemon">capture.py — The PipeWire Daemon</h3>
+  <p>A self-contained Python script that captures audio using PipeWire's <code>pw-record</code> tool. Runs as a background daemon and exposes a tiny HTTP API on port 7779.</p>
+
+  <div class="callout info">
+    <strong>Why PipeWire instead of the browser?</strong>
+    <code>chrome.tabCapture</code> in MV3 is fragile — it requires clicking the extension icon on the exact right tab, and mic capture via <code>getUserMedia</code> is unreliable in background extension contexts. PipeWire captures at the OS level: it sees everything going through your mic and speakers, regardless of which app is making the sound.
+  </div>
+
+  <h4>How recording works</h4>
+  <p>Two <code>pw-record</code> subprocesses run simultaneously — one targeting the mic node, one targeting the speaker sink (PipeWire automatically monitors it). Their raw PCM streams are mixed with saturating addition:</p>
+<pre><code><span class="kw">def</span> <span class="fn">mix_s16le</span>(a: <span class="ty">bytes</span>, b: <span class="ty">bytes</span>) -> <span class="ty">bytes</span>:
+    arr_a = array.array(<span class="st">"h"</span>, a)
+    arr_b = array.array(<span class="st">"h"</span>, b)
+    <span class="kw">return</span> bytes(array.array(<span class="st">"h"</span>, (
+        max(<span class="nu">-32768</span>, min(<span class="nu">32767</span>, x + y)) <span class="kw">for</span> x, y <span class="kw">in</span> zip(arr_a, arr_b)
+    )))
+</code></pre>
+
+  <h4>Daemon HTTP API (port 7779)</h4>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Path</th><th>Method</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>/status</code></td><td>GET</td><td>Returns recording state, elapsed time, file size, device names</td></tr>
+      <tr><td><code>/start</code></td><td>POST</td><td><code>{"token": "&lt;jwt&gt;", "api": "&lt;url&gt;"}</code> — starts recording</td></tr>
+      <tr><td><code>/stop</code></td><td>POST</td><td>Stops recording and triggers upload + pipeline</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>BT sink hot-plugging</h4>
+  <p>Every 5 seconds the daemon re-scans for new Bluetooth sinks. Bluetooth audio devices that connect mid-call switch PipeWire nodes — this ensures they're captured automatically without restarting.</p>
+
+  <h4>CLI modes</h4>
+<pre><code>python3 capture.py --daemon         <span class="cm"># run as daemon on :7779</span>
+python3 capture.py --token &lt;jwt&gt;    <span class="cm"># one-shot recording, Ctrl+C to stop</span>
+python3 capture.py --list           <span class="cm"># show available PipeWire nodes</span>
+python3 capture.py --start          <span class="cm"># tell running daemon to start</span>
+python3 capture.py --stop           <span class="cm"># tell running daemon to stop</span>
+python3 capture.py --status         <span class="cm"># show daemon recording status</span>
+</code></pre>
+
+  <h3 id="tray-app">tray.py — The Desktop App</h3>
+  <p>A system tray app that wraps the capture daemon with a native GUI. Uses two libraries:</p>
+  <ul>
+    <li><strong>pystray</strong> — puts an icon in the system tray (xorg backend for Linux Wayland+Xwayland compatibility)</li>
+    <li><strong>pywebview</strong> — opens a native WebKit window containing a self-contained HTML/CSS/JS app</li>
+  </ul>
+
+  <h4>Threading model</h4>
+  <p><code>webview.start()</code> must run on the main thread (GTK requirement on Linux). pystray has <code>run_detached()</code> which puts it in a background thread. So the startup is:</p>
+<pre><code><span class="kw">def</span> <span class="fn">run</span>(self):
+    self._window = webview.create_window(<span class="st">"MeetBuddy"</span>, html=HTML, js_api=self._api, ...)
+    self._icon.run_detached()            <span class="cm"># pystray → background thread</span>
+    webview.start(func=_hide_on_start)   <span class="cm"># GTK event loop → main thread</span>
+</code></pre>
+
+  <h4>The JS bridge</h4>
+  <p>Python methods are exposed to the in-window JavaScript via <code>js_api</code>. The HTML app calls them as:</p>
+<pre><code><span class="kw">const</span> status   = <span class="kw">await</span> window.pywebview.api.get_status();
+<span class="kw">const</span> meetings = <span class="kw">await</span> window.pywebview.api.get_meetings();
+<span class="kw">await</span> window.pywebview.api.start_recording();
+</code></pre>
+  <p>This means the window's JS can read config, control the daemon, and fetch meetings from the API — all through Python, with no CORS issues.</p>
+
+  <h4>Window lifecycle</h4>
+  <p>The window is created hidden on startup. Left-clicking the tray icon calls <code>window.show()</code> / <code>window.hide()</code> to toggle it. The tray icon changes color (purple = idle, red = recording) via a background thread that polls the daemon every 2 seconds.</p>
+
   <!-- ─────────────────────────────── EXTENSION ─────────────────────────────── -->
   <h2 id="extension">Chrome Extension — <code>apps/extension/</code></h2>
   <p>Built with <strong>Plasmo</strong>, a framework for Chrome extensions with React and TypeScript.</p>
 
   <h3 id="bg">background.ts — The Service Worker</h3>
-  <p>This is the brain of the extension. It runs persistently in the background.</p>
+  <p>The brain of the extension. Tracks the active Google Meet tab and orchestrates capture. Acts as a message bus — relays <code>MIC_CHUNK</code> and <code>OFFSCREEN_CHUNK</code> messages from the content script and offscreen doc to the sidepanel via a persistent port.</p>
 
-  <h4>Tab detection</h4>
-<pre><code>chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  <span class="kw">if</span> (changeInfo.status === <span class="st">"complete"</span> && MEET_PATTERN.test(tab.url)) {
-    handleMeetTabOpened(tabId);
-  }
-});
-</code></pre>
-  <p>When a Google Meet URL fully loads, recording starts automatically.</p>
-
-  <h4>Recording flow</h4>
+  <h4>Recording flow (user clicks the extension icon)</h4>
   <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>handleMeetTabOpened</strong> — gets auth token from <code>chrome.storage.local</code>, calls API to create a meeting record, calls <code>startRecording</code></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>startRecording</strong> — uses <code>chrome.tabCapture.getMediaStreamId</code> to get the tab's audio stream, creates a <code>MediaRecorder</code> with <code>audio/webm;codecs=opus</code></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body">Opens a WebSocket connection to the backend</div></div>
-    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>setInterval(flushChunk, 5000)</strong> — every 5 seconds, converts buffered audio blobs to base64 and sends over WebSocket</div></div>
-    <div class="step"><div class="step-num">5</div><div class="step-body"><strong>stopRecording</strong> — flushes remaining audio, sends <code>{"type": "stop"}</code>, closes WebSocket</div></div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><code>chrome.tabCapture.getMediaStreamId</code> — gets a stream ID for the Meet tab's audio. Stores <code>activeMeetTabId</code> for later use.</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">Opens an offscreen document and sends it <code>OFFSCREEN_START</code> with the stream ID — this starts tab audio capture.</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">Sends <code>START_MIC</code> to the content script in the Meet tab — this starts mic capture.</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body">The sidepanel's WebSocket connection forwards all incoming chunks to the API.</div></div>
+  </div>
+
+  <div class="callout warn">
+    <strong>Why mic capture lives in the content script</strong>
+    In Chrome MV3, <code>getUserMedia</code> for the microphone only works reliably in contexts where the user has already granted permission. The Google Meet tab is such a context (Meet itself already has mic permission). The offscreen document is a background context that doesn't inherit this — so mic was moved to <code>content.ts</code>.
   </div>
 
   <h3 id="content">content.ts — The Content Script</h3>
-  <p>Injected into every <code>meet.google.com</code> page. Watches the DOM for participant tile elements using a <code>MutationObserver</code>. When participants change, it waits 2 seconds (debounce), extracts names from the DOM, and sends them to the background service worker via <code>chrome.runtime.sendMessage</code>. Used for speaker diarization (Phase 2 — not yet wired).</p>
+  <p>Injected into every <code>meet.google.com</code> page. Has two jobs:</p>
 
-  <h3 id="popup">popup/index.tsx — Settings Popup</h3>
-  <p>A small React form that saves two values to <code>chrome.storage.local</code>:</p>
+  <h4>1. Mic capture</h4>
+  <p>When it receives <code>START_MIC</code> from the background, it calls <code>getUserMedia</code> and starts a <code>MediaRecorder</code>. Audio chunks are base64-encoded and sent to background as <code>MIC_CHUNK</code> every 5 seconds. Stops on <code>STOP_MIC</code>.</p>
+<pre><code><span class="kw">async function</span> <span class="fn">startMic</span>(micDeviceId?: <span class="ty">string</span>) {
+  micStream = <span class="kw">await</span> navigator.mediaDevices.getUserMedia({ audio: constraints, video: <span class="kw">false</span> });
+  micRecorder = <span class="kw">new</span> MediaRecorder(micStream, { mimeType: <span class="st">"audio/webm;codecs=opus"</span> });
+  micRecorder.ondataavailable = (e) => { <span class="cm">/* base64 encode + sendMessage MIC_CHUNK */</span> };
+  micRecorder.start(<span class="nu">5_000</span>);
+  chrome.runtime.sendMessage({ type: <span class="st">"MIC_STATUS"</span>, active: <span class="kw">true</span> });
+}
+</code></pre>
+
+  <h4>2. Participant detection</h4>
+  <p>Watches the DOM for participant tile elements using a <code>MutationObserver</code>. Extracts names for speaker diarization (Phase 2 — not yet fully wired).</p>
+
+  <h3 id="offscreen">tabs/offscreen.tsx — The Offscreen Document</h3>
+  <p>A hidden document that captures <strong>tab audio only</strong> (remote participants) using the stream ID from <code>tabCapture</code>. This is the only MV3 context where <code>getUserMedia</code> with <code>chromeMediaSource: "tab"</code> works. Sends <code>OFFSCREEN_CHUNK</code> messages to background every 5 seconds. Does not handle mic — that's <code>content.ts</code>'s job.</p>
+
+  <h3 id="sidepanel">sidepanel.tsx — Side Panel UI</h3>
+  <p>The main user-facing UI. Opens in Chrome's side panel when the extension icon is clicked on a Meet tab.</p>
   <ul>
-    <li><code>apiUrl</code> — which backend to talk to</li>
-    <li><code>accessToken</code> — the JWT to authenticate with</li>
+    <li>Connects to background via a <strong>persistent port</strong> (survives page navigations)</li>
+    <li>Listens for <code>OFFSCREEN_CHUNK</code> messages and forwards each over WebSocket to the API</li>
+    <li>Shows <strong>mic status indicator</strong> — green "Mic + Speaker" if mic is active, amber "Speaker only — mic failed"</li>
+    <li>Persists recording state in <code>chrome.storage.local</code> so it survives being closed and reopened mid-recording</li>
   </ul>
-  <p>You paste your token from the web app. This is how the extension knows who you are.</p>
-
-  <h3 id="sidepanel">sidepanel/index.tsx — Side Panel UI</h3>
-  <p>Shows recording status during a meeting. Listens to <code>chrome.storage.onChanged</code> — whenever <code>recordingState</code> changes in storage (set by the background when recording starts/stops), the UI updates automatically. Has a "Stop recording" button that sends <code>STOP_RECORDING</code> to the background.</p>
 
   <!-- ─────────────────────────────── WEBAPP ─────────────────────────────── -->
   <h2 id="webapp">Next.js Web App — <code>apps/web/</code></h2>
@@ -837,34 +954,62 @@ queryApi.ask(token, question, meetingIds?)
 
   <!-- ─────────────────────────────── E2E ─────────────────────────────── -->
   <h2 id="e2e">End-to-End Flow</h2>
-  <p>What happens from you joining a Google Meet to being able to ask "what did we decide?"</p>
+  <p>What happens from clicking Record to being able to ask "what did we decide?"</p>
 
+  <h3>Path A — via tray app</h3>
   <div class="e2e">
     <div class="e2e-step">
-      <h4>You open meet.google.com</h4>
+      <h4>Click the tray icon → open app window → click the mic button</h4>
       <ul>
-        <li>Extension detects the URL</li>
-        <li>Calls <code>POST /api/v1/meetings</code> to create a meeting record</li>
-        <li>Captures tab audio with <code>MediaRecorder</code></li>
+        <li><code>capture.py</code> calls <code>POST /api/v1/meetings</code> to create a meeting record</li>
+        <li>Two <code>pw-record</code> subprocesses start — one for mic, one for speaker monitor</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>While the meeting runs</h4>
+      <ul>
+        <li>PCM chunks buffered every 200 ms, mixed in real time</li>
+        <li>WAV file grows on disk (capped at 23 MB to stay under Groq's limit)</li>
+      </ul>
+    </div>
+    <div class="e2e-step">
+      <h4>Click Stop</h4>
+      <ul>
+        <li>Daemon finalizes the WAV file</li>
+        <li><code>POST /api/v1/upload/audio</code> — uploads the file</li>
+        <li><code>POST /api/v1/upload/complete</code> — triggers the Celery pipeline</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Path B — via Chrome extension</h3>
+  <div class="e2e">
+    <div class="e2e-step">
+      <h4>You open meet.google.com and click the extension icon</h4>
+      <ul>
+        <li>background.ts calls <code>chrome.tabCapture.getMediaStreamId</code></li>
+        <li>Offscreen document starts recording tab audio (remote participants)</li>
+        <li>content.ts starts recording mic audio (you) via <code>getUserMedia</code></li>
       </ul>
     </div>
     <div class="e2e-step">
       <h4>Every 5 seconds while meeting runs</h4>
       <ul>
-        <li>Audio chunks sent as base64 over WebSocket</li>
+        <li>Both streams send base64 WebM chunks over WebSocket</li>
         <li>Server buffers them in memory (<code>AUDIO_CHUNK_STORE</code>)</li>
       </ul>
     </div>
     <div class="e2e-step">
-      <h4>Meeting ends (tab closes or you click Stop)</h4>
+      <h4>You click Stop</h4>
       <ul>
-        <li>Extension sends <code>{"type": "stop"}</code></li>
-        <li>Server concatenates all audio bytes</li>
-        <li>Uploads to MinIO: <code>audio/&lt;uuid&gt;/recording.webm</code></li>
-        <li>Sets <code>meeting.status = "processing"</code></li>
-        <li>Fires <code>process_meeting(meeting_id)</code> into Celery queue</li>
+        <li>Extension sends <code>{"type": "stop"}</code> over WebSocket</li>
+        <li>Server concatenates all chunks, uploads to MinIO, triggers pipeline</li>
       </ul>
     </div>
+  </div>
+
+  <h3>Shared pipeline (both paths)</h3>
+  <div class="e2e">
     <div class="e2e-step">
       <h4>Celery worker — Step 1: Transcription</h4>
       <ul>
@@ -890,22 +1035,21 @@ queryApi.ask(token, question, meetingIds?)
       </ul>
     </div>
     <div class="e2e-step">
-      <h4>Celery worker — Step 4: Done</h4>
+      <h4>Celery worker — Step 4: Done (or Failed)</h4>
       <ul>
         <li>Sets <code>meeting.status = "done"</code></li>
+        <li>If any step exhausts 3 retries → sets <code>meeting.status = "failed"</code></li>
       </ul>
     </div>
     <div class="e2e-step">
       <h4>You open the web app</h4>
       <ul>
-        <li>Sees the meeting listed as "done"</li>
-        <li>Clicks it → sees summary, action items, decisions, transcript</li>
+        <li>Meeting listed as "done" — click it to see summary, action items, transcript</li>
       </ul>
     </div>
     <div class="e2e-step">
       <h4>You type "what did we decide about pricing?"</h4>
       <ul>
-        <li>Web app POSTs <code>{"q": "what did we decide about pricing?"}</code></li>
         <li>API embeds your question (same 768-dim model)</li>
         <li>PostgreSQL cosine similarity search finds top 8 chunks</li>
         <li>Those chunks become context for the LLM</li>
@@ -922,6 +1066,9 @@ queryApi.ask(token, question, meetingIds?)
   <table>
     <thead><tr><th>Technology</th><th>Why it's used</th></tr></thead>
     <tbody>
+      <tr><td><strong>PipeWire / pw-record</strong></td><td>OS-level audio capture — works with any app, not just browser tabs</td></tr>
+      <tr><td><strong>pystray</strong></td><td>Cross-platform system tray icon; xorg backend used on Linux for Wayland+Xwayland compat</td></tr>
+      <tr><td><strong>pywebview</strong></td><td>Wraps a native WebKit window around HTML/CSS/JS — desktop app feel without Electron's weight</td></tr>
       <tr><td><strong>FastAPI</strong></td><td>Async Python web framework — handles many requests concurrently without threads</td></tr>
       <tr><td><strong>SQLAlchemy async</strong></td><td>Async ORM — database calls don't block the event loop</td></tr>
       <tr><td><strong>Alembic</strong></td><td>Schema migrations — controlled, versioned database changes</td></tr>
@@ -992,7 +1139,7 @@ queryApi.ask(token, question, meetingIds?)
   <p>The key insight is that the LLM only "knows" what's in the retrieved context, so answers are grounded in your actual meeting data rather than the model's training data.</p>
 
   <hr />
-  <p style="color: var(--muted); font-size: 0.8em; text-align: center;">Generated from MeetBuddy source code · 2026-05-17</p>
+  <p style="color: var(--muted); font-size: 0.8em; text-align: center;">Generated from MeetBuddy source code · 2026-06-01</p>
 
 </main>
 </body>

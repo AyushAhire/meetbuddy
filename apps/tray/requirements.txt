@@ -2,4 +2,5 @@
 pystray
 pillow
 pywebview
+cairosvg   # renders icon.svg for the tray icon; falls back to PIL-drawn icon if missing
 # httpx is required by capture.py (already installed in apps/api/.venv)

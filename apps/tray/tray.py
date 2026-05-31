@@ -30,11 +30,19 @@ except ImportError:
     print("Missing deps — run:  pip install pystray pillow pywebview")
     sys.exit(1)
 
+try:
+    import cairosvg
+    import io as _io
+    _HAVE_CAIROSVG = True
+except ImportError:
+    _HAVE_CAIROSVG = False
+
 DAEMON_PORT = 7779
 CONFIG_FILE = Path.home() / ".config" / "meetbuddy" / "tray.json"
 CAPTURE_PY  = Path(__file__).parent.parent / "capture" / "capture.py"
 _VENV_PY    = Path(__file__).parent.parent / "api" / ".venv" / "bin" / "python"
 PYTHON      = str(_VENV_PY) if _VENV_PY.exists() else sys.executable
+FAVICON_SVG = Path(__file__).parent / "icon.svg"
 
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -70,6 +78,22 @@ def _req(path: str, method: str = "GET", body: dict | None = None) -> dict | Non
 # ── Tray icons ───────────────────────────────────────────────────────────────
 
 def _make_icon(recording: bool) -> Image.Image:
+    """
+    Load the favicon SVG and tint it for the current state.
+    Falls back to a PIL-drawn icon if cairosvg or the SVG file aren't available.
+    """
+    if _HAVE_CAIROSVG and FAVICON_SVG.exists():
+        try:
+            svg = FAVICON_SVG.read_text()
+            if recording:
+                # Swap blue waveform to red, darken background
+                svg = svg.replace("#3D7BFF", "#ef4444").replace("#080A0E", "#1a0000")
+            png = cairosvg.svg2png(bytestring=svg.encode(), output_width=64, output_height=64)
+            return Image.open(_io.BytesIO(png)).convert("RGBA")
+        except Exception:
+            pass  # fall through to PIL fallback
+
+    # PIL fallback
     sz  = 64
     img = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
     d   = ImageDraw.Draw(img)
@@ -113,6 +137,18 @@ class Api:
         api = self._app.cfg.get("api", "http://localhost:8000")
         if not tok:
             return {"ok": False, "error": "no_token"}
+        # Validate token against API first
+        try:
+            req = urllib.request.Request(
+                f"{api}/api/v1/meetings?limit=1",
+                headers={"Authorization": f"Bearer {tok}"},
+            )
+            urllib.request.urlopen(req, timeout=5).close()
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                return {"ok": False, "error": "token_expired"}
+        except Exception:
+            return {"ok": False, "error": "api_down"}
         r = _req("start", "POST", {"token": tok, "api": api})
         return r if r else {"ok": False, "error": "daemon_down"}
 
@@ -120,20 +156,24 @@ class Api:
         r = _req("stop", "POST")
         return r if r else {"ok": False, "error": "daemon_down"}
 
-    def get_meetings(self) -> list:
+    def get_meetings(self) -> dict:
         tok = self._app.cfg.get("token", "").strip()
         api = self._app.cfg.get("api", "http://localhost:8000")
         if not tok:
-            return []
+            return {"error": "no_token", "items": []}
         req = urllib.request.Request(
             f"{api}/api/v1/meetings?limit=8",
             headers={"Authorization": f"Bearer {tok}"},
         )
         try:
             with urllib.request.urlopen(req, timeout=5) as r:
-                return json.loads(r.read())
+                return {"error": None, "items": json.loads(r.read())}
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                return {"error": "token_expired", "items": []}
+            return {"error": "api_error", "items": []}
         except Exception:
-            return []
+            return {"error": "api_down", "items": []}
 
     def open_meeting(self, meeting_id: str) -> None:
         api = self._app.cfg.get("api", "http://localhost:8000")
@@ -173,10 +213,11 @@ HTML = """<!DOCTYPE html>
     padding:12px 14px 11px; border-bottom:1px solid var(--border); flex-shrink:0;
   }
   .logo {
-    width:22px; height:22px; background:var(--indigo); border-radius:6px;
+    width:22px; height:22px; background:#080A0E; border-radius:6px;
+    border:1px solid #1a1f2e;
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .logo svg { width:11px; height:11px; }
+  .logo svg { width:16px; height:16px; }
   .header-title { font-weight:600; font-size:13px; }
   .spacer { flex:1; }
   .icon-btn {
@@ -330,9 +371,12 @@ HTML = """<!DOCTYPE html>
 
 <div class="header">
   <div class="logo">
-    <svg viewBox="0 0 24 24" fill="none">
-      <rect x="6" y="4" width="4" height="16" rx="1" fill="white"/>
-      <rect x="14" y="4" width="4" height="16" rx="1" fill="white"/>
+    <svg viewBox="0 0 32 32" fill="none">
+      <line x1="5"  y1="16" x2="5"  y2="16" stroke="#3D7BFF" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="10" y1="12" x2="10" y2="20" stroke="#3D7BFF" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="16" y1="7"  x2="16" y2="25" stroke="#3D7BFF" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="22" y1="11" x2="22" y2="21" stroke="#3D7BFF" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="27" y1="14" x2="27" y2="18" stroke="#3D7BFF" stroke-width="2.5" stroke-linecap="round"/>
     </svg>
   </div>
   <span class="header-title">MeetBuddy</span>
@@ -355,11 +399,16 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <script>
-let cfg      = {token:'',api:'http://localhost:8000'};
-let status   = {recording:false,elapsed_s:0,size_mb:0,mic:'',monitor:'',meeting_id:null,daemon_up:false};
-let meetings = [];
+let cfg         = {token:'',api:'http://localhost:8000'};
+let status      = {recording:false,elapsed_s:0,size_mb:0,mic:'',monitor:'',meeting_id:null,daemon_up:false};
+let meetings    = [];
+let meetError   = null;
+let recordError = null;
 let showSettings = false;
-let savedMsg = false;
+let savedMsg    = false;
+// Track last rendered state to avoid unnecessary full re-renders
+let lastRecording = null;
+let lastDaemonUp  = null;
 
 function fmt(s) {
   return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
@@ -389,26 +438,68 @@ async function api(method,...args) {
 async function poll() {
   const st = await api('get_status');
   if (!st) return;
-  const wasRec = status.recording;
+
+  const wasRec     = status.recording;
+  const prevDaemon = status.daemon_up;
   status = st;
+
+  // Always update footer in-place (cheap, no flicker)
   document.getElementById('fdot').className = 'fdot'+(st.daemon_up?' on':'');
   document.getElementById('flabel').textContent = st.daemon_up
     ? (st.recording ? 'Recording' : 'Ready') : 'Daemon offline';
-  if (wasRec && !st.recording) setTimeout(loadMeetings, 2000);
-  render();
+
+  // If recording, update timer in-place instead of full re-render
+  if (st.recording) {
+    const timerEl = document.getElementById('liveTimer');
+    const sizeEl  = document.getElementById('liveSize');
+    if (timerEl) {
+      timerEl.textContent = fmt(st.elapsed_s);
+      if (sizeEl) sizeEl.textContent = st.size_mb.toFixed(1)+' MB';
+      return; // skip full re-render
+    }
+  }
+
+  // Full re-render only when recording state or daemon state changes
+  const stateChanged = (wasRec !== st.recording) || (prevDaemon !== st.daemon_up);
+  if (stateChanged) {
+    if (wasRec && !st.recording) {
+      recordError = null;
+      setTimeout(loadMeetings, 2000);
+    }
+    render();
+  }
 }
 
 async function loadMeetings() {
-  const m = await api('get_meetings');
-  if (m) { meetings = m; render(); }
+  const r = await api('get_meetings');
+  if (!r) return;
+  meetError = r.error;
+  meetings  = r.items || [];
+  // Only re-render the meetings section in-place
+  const el = document.getElementById('meetingsSection');
+  if (el) el.innerHTML = renderMeetings();
+  else render();
 }
 
 async function toggleRecord() {
   if (!cfg.token) { showSettings=true; render(); return; }
-  if (status.recording) { await api('stop_recording'); }
-  else {
+  if (status.recording) {
+    await api('stop_recording');
+  } else {
+    recordError = null;
     const r = await api('start_recording');
-    if (r && r.error==='no_token') { showSettings=true; render(); return; }
+    if (r && !r.ok) {
+      const msgs = {
+        no_token:      'No token set — open Settings.',
+        token_expired: 'Token expired — paste a new one in Settings.',
+        api_down:      'Cannot reach API at '+cfg.api,
+        daemon_down:   'Capture daemon is not running.',
+      };
+      recordError = msgs[r.error] || ('Error: '+r.error);
+      if (r.error === 'no_token' || r.error === 'token_expired') showSettings = true;
+      render();
+      return;
+    }
   }
   await poll();
 }
@@ -418,6 +509,7 @@ async function saveSettings() {
   const url = document.getElementById('iApi').value;
   await api('save_config', tok, url);
   cfg.token=tok; cfg.api=url;
+  meetError=null; recordError=null;
   savedMsg=true; render();
   await loadMeetings();
   setTimeout(()=>{ savedMsg=false; render(); }, 2000);
@@ -426,6 +518,37 @@ async function saveSettings() {
 function toggleSettings() { showSettings=!showSettings; render(); }
 function openMeeting(id)   { api('open_meeting',id); }
 function openDashboard()   { api('open_dashboard'); }
+
+function renderMeetings() {
+  const errMsgs = {
+    token_expired: 'Token expired — paste a new one in Settings.',
+    no_token:      'Set your token in Settings to see meetings.',
+    api_error:     'Could not reach the API.',
+    api_down:      'API is offline.',
+  };
+  if (meetError) return `<div class="empty"><p style="color:var(--amber)">${errMsgs[meetError]||meetError}</p></div>`;
+  if (!meetings.length) return `<div class="empty"><p>No meetings yet</p></div>`;
+  return meetings.map(m => `
+    <div class="meeting-item" onclick="openMeeting('${m.id}')">
+      <div class="meeting-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+          <path d="M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+      </div>
+      <div class="meeting-info">
+        <div class="meeting-time">${fmtDate(m.created_at||m.started_at)}</div>
+        <div class="meeting-plat">${platLabel(m.platform)} &nbsp;${statusBadge(m.status)}</div>
+      </div>
+      <div class="chevron">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+    </div>`).join('');
+}
 
 function render() {
   let h = '';
@@ -463,8 +586,8 @@ function render() {
     </button>
     <div class="record-status">
       ${rec
-        ? `<div class="timer">${fmt(status.elapsed_s)}</div>
-           <div class="rec-sub">${status.size_mb.toFixed(1)} MB</div>`
+        ? `<div class="timer" id="liveTimer">${fmt(status.elapsed_s)}</div>
+           <div class="rec-sub" id="liveSize">${status.size_mb.toFixed(1)} MB</div>`
         : `<div class="rec-label">Not recording</div>
            <div class="rec-sub">Click to start</div>`
       }
@@ -476,40 +599,16 @@ function render() {
     </div>` : ''}
   </div>`;
 
+  if (recordError)
+    h += `<div class="banner banner-red fade" style="font-size:11px">${recordError}</div>`;
+
   h += `<div class="fade">
     <div class="section-hdr">
       <span class="section-title">Recent meetings</span>
       <button class="text-btn" onclick="loadMeetings()">Refresh</button>
-    </div>`;
-
-  if (!cfg.token) {
-    h += `<div class="empty"><p>Set your token to see meetings</p></div>`;
-  } else if (!meetings.length) {
-    h += `<div class="empty"><p>No meetings yet</p></div>`;
-  } else {
-    meetings.forEach(m => {
-      h += `<div class="meeting-item" onclick="openMeeting('${m.id}')">
-        <div class="meeting-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 00-3-3.87"/>
-            <path d="M16 3.13a4 4 0 010 7.75"/>
-          </svg>
-        </div>
-        <div class="meeting-info">
-          <div class="meeting-time">${fmtDate(m.created_at||m.started_at)}</div>
-          <div class="meeting-plat">${platLabel(m.platform)} &nbsp;${statusBadge(m.status)}</div>
-        </div>
-        <div class="chevron">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
-        </div>
-      </div>`;
-    });
-  }
-  h += `</div>`;
+    </div>
+    <div id="meetingsSection">${renderMeetings()}</div>
+  </div>`;
 
   h += `<div class="fade">
     <button class="settings-toggle${showSettings?' open':''}" onclick="toggleSettings()">
