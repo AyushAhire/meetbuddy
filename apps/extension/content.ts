@@ -2,6 +2,52 @@ export const config = {
   matches: ["https://meet.google.com/*"],
 }
 
+// ── Mic capture ──────────────────────────────────────────────────────────────
+
+let micRecorder: MediaRecorder | null = null;
+let micStream: MediaStream | null = null;
+let micSeq = 0;
+
+async function startMic(micDeviceId?: string) {
+  try {
+    const constraints: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+    if (micDeviceId) constraints.deviceId = micDeviceId;
+
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: constraints, video: false });
+    micRecorder = new MediaRecorder(micStream, { mimeType: "audio/webm;codecs=opus" });
+    micRecorder.ondataavailable = (e) => {
+      if (e.data.size === 0) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const b64 = (reader.result as string).split(",")[1];
+        chrome.runtime.sendMessage({ type: "MIC_CHUNK", audio_b64: b64, seq: micSeq++ }).catch(() => {});
+      };
+      reader.readAsDataURL(e.data);
+    };
+    micRecorder.start(5_000);
+    chrome.runtime.sendMessage({ type: "MIC_STATUS", active: true }).catch(() => {});
+  } catch (e) {
+    chrome.runtime.sendMessage({ type: "MIC_STATUS", active: false, error: (e as Error).message }).catch(() => {});
+  }
+}
+
+function stopMic() {
+  micRecorder?.stop();
+  micStream?.getTracks().forEach((t) => t.stop());
+  micRecorder = null;
+  micStream = null;
+  micSeq = 0;
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "START_MIC") startMic(msg.micDeviceId);
+  if (msg.type === "STOP_MIC")  stopMic();
+});
+
 // ── Participant detection ────────────────────────────────────────────────────
 
 const PARTICIPANT_SELECTOR = "[data-participant-id]";
@@ -27,67 +73,42 @@ const observer = new MutationObserver(() => {
 });
 observer.observe(document.body, { childList: true, subtree: true });
 
-// ── Microphone capture via direct port from sidepanel ────────────────────────
-// chrome.tabs.connect (sidepanel → content) bypasses the MV3 service worker,
-// which gets killed between chunks and loses the forwarding port.
+// ── Mic mute detection ───────────────────────────────────────────────────────
+// Watch for Google Meet's data-is-muted attribute changes on the mic button.
+// The message is broadcast to all extension contexts so the offscreen document
+// receives it directly without needing a background relay.
 
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== "mic-audio") return;
+let lastMuted: boolean | null = null;
 
-  let micRecorder: MediaRecorder | null = null;
-  let micChunks: Blob[] = [];
-  let micSeq = 0;
-
-  const deviceId: string | undefined = undefined; // set from first message
-
-  function flush() {
-    if (!micChunks.length) return;
-    const blob = new Blob(micChunks, { type: "audio/webm" });
-    micChunks = [];
-    const seq = micSeq++;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      try {
-        port.postMessage({ type: "MIC_CHUNK", audio_b64: (reader.result as string).split(",")[1], seq });
-      } catch {}
-    };
-    reader.readAsDataURL(blob);
+function readMuteState(): boolean | null {
+  // data-is-muted is the most reliable signal across Meet versions
+  const el = document.querySelector<HTMLElement>("[data-is-muted]");
+  if (el) return el.getAttribute("data-is-muted") === "true";
+  // Fallback: mic button with aria-pressed (pressed = muted in some builds)
+  const btn = document.querySelector<HTMLElement>(
+    'button[aria-label*="microphone" i], button[aria-label*="mic" i]'
+  );
+  if (btn) {
+    const pressed = btn.getAttribute("aria-pressed");
+    if (pressed !== null) return pressed === "true";
   }
+  return null;
+}
 
-  port.onMessage.addListener(async (msg) => {
-    if (msg.type === "START_MIC") {
-      if (micRecorder) return;
-      try {
-        const constraints: MediaStreamConstraints = {
-          audio: msg.deviceId ? { deviceId: { exact: msg.deviceId } } : true,
-          video: false,
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        micRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
-        micRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            micChunks.push(e.data);
-            flush();
-          }
-        };
-        micRecorder.start(5_000);
-        port.postMessage({ type: "MIC_READY" });
-      } catch (e: any) {
-        port.postMessage({ type: "MIC_ERROR", message: e?.message });
-      }
-    }
+function sendMuteIfChanged() {
+  const muted = readMuteState();
+  if (muted !== null && muted !== lastMuted) {
+    lastMuted = muted;
+    chrome.runtime.sendMessage({ type: "MIC_MUTE_CHANGED", muted });
+  }
+}
 
-    if (msg.type === "LIST_DEVICES") {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const mics = devices
-        .filter((d) => d.kind === "audioinput")
-        .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` }));
-      port.postMessage({ type: "DEVICE_LIST", mics });
-    }
-  });
-
-  port.onDisconnect.addListener(() => {
-    micRecorder?.stream.getTracks().forEach((t) => t.stop());
-    micRecorder = null;
-  });
+const muteObserver = new MutationObserver(sendMuteIfChanged);
+muteObserver.observe(document.body, {
+  attributes: true,
+  attributeFilter: ["data-is-muted", "aria-pressed"],
+  subtree: true,
 });
+
+// Poll as a fallback for Meet versions that swap elements instead of mutating attrs
+setInterval(sendMuteIfChanged, 2_000);

@@ -27,7 +27,7 @@
     "name": "MeetBuddy",
     "description": "Privacy-first AI meeting intelligence",
     "version": "0.1.0",
-    "permissions": ["tabCapture", "storage", "tabs", "activeTab", "sidePanel", "scripting"],
+    "permissions": ["tabCapture", "storage", "tabs", "activeTab", "sidePanel", "scripting", "offscreen"],
     "host_permissions": ["https://meet.google.com/*", "http://localhost/*"]
   }
 }

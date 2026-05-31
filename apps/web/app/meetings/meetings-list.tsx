@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { meetingsApi, type Meeting } from "@/lib/api";
 import { formatDuration } from "@/lib/utils";
@@ -22,12 +22,18 @@ export function MeetingsList({ accessToken }: Props) {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const { data: meetings, isLoading, error } = useQuery({
+  const { data: meetings, isLoading, error, refetch } = useQuery({
     queryKey: ["meetings"],
     queryFn: () => meetingsApi.list(accessToken),
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    const handler = () => refetch();
+    window.addEventListener("meetbuddy:refresh", handler);
+    return () => window.removeEventListener("meetbuddy:refresh", handler);
+  }, [refetch]);
 
   const deleteMutation = useMutation({
     mutationFn: (ids: string[]) => Promise.all(ids.map((id) => meetingsApi.delete(accessToken, id))),
@@ -54,9 +60,12 @@ export function MeetingsList({ accessToken }: Props) {
 
   if (isLoading) {
     return (
-      <div className="space-y-px">
+      <div className="rounded-md overflow-hidden border border-border">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-14 rounded surface animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
+          <div
+            key={i}
+            className="h-[62px] bg-card animate-pulse border-b border-border last:border-b-0"
+          />
         ))}
       </div>
     );
@@ -64,18 +73,18 @@ export function MeetingsList({ accessToken }: Props) {
 
   if (error) {
     return (
-      <p className="text-xs text-destructive surface px-4 py-3">
-        Failed to load meetings.
-      </p>
+      <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
+        <p className="text-xs text-destructive">Failed to load meetings.</p>
+      </div>
     );
   }
 
   if (!meetings?.length) {
     return (
-      <div className="surface py-16 text-center animate-fade-in-up">
+      <div className="rounded-md border border-border bg-card py-16 text-center animate-fade-in-up">
         <p className="text-sm font-medium text-foreground mb-1">No meetings yet</p>
         <p className="text-xs text-muted-foreground">
-          Install the browser extension to start capturing meetings.
+          Click <strong className="text-foreground/60">Record</strong> in the nav bar to capture your first meeting.
         </p>
       </div>
     );
@@ -84,7 +93,7 @@ export function MeetingsList({ accessToken }: Props) {
   return (
     <div className="animate-fade-in">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 h-8">
         {selecting ? (
           <>
             <button onClick={() => setSelected(new Set(meetings.map((m) => m.id)))} className="btn-ghost">
@@ -98,7 +107,10 @@ export function MeetingsList({ accessToken }: Props) {
               <Trash2 className="w-3 h-3" />
               {deleteMutation.isPending ? "Deleting…" : `Delete${selected.size ? ` (${selected.size})` : ""}`}
             </button>
-            <button onClick={() => { setSelecting(false); setSelected(new Set()); }} className="btn-ghost ml-auto">
+            <button
+              onClick={() => { setSelecting(false); setSelected(new Set()); }}
+              className="btn-ghost ml-auto"
+            >
               Cancel
             </button>
           </>
@@ -109,8 +121,8 @@ export function MeetingsList({ accessToken }: Props) {
         )}
       </div>
 
-      {/* List */}
-      <div className="surface divide-y divide-border overflow-hidden">
+      {/* List — block-level rows so divide-y and full-width clicks work */}
+      <div className="rounded-md border border-border bg-card overflow-hidden">
         {meetings.map((m, i) => (
           <MeetingRow
             key={m.id}
@@ -119,6 +131,7 @@ export function MeetingsList({ accessToken }: Props) {
             selected={selected.has(m.id)}
             onToggle={() => toggleSelect(m.id)}
             index={i}
+            isLast={i === meetings.length - 1}
           />
         ))}
       </div>
@@ -127,24 +140,29 @@ export function MeetingsList({ accessToken }: Props) {
 }
 
 function MeetingRow({
-  meeting, selecting, selected, onToggle, index,
+  meeting, selecting, selected, onToggle, index, isLast,
 }: {
   meeting: Meeting;
   selecting: boolean;
   selected: boolean;
   onToggle: () => void;
   index: number;
+  isLast: boolean;
 }) {
   const status = STATUS[meeting.status] ?? { color: "#737373", label: meeting.status };
   const actionItemCount = meeting.insights?.action_items?.length ?? 0;
 
-  const row = (
+  const rowStyle: React.CSSProperties = {
+    animationDelay: `${Math.min(index * 40, 320)}ms`,
+    ...(selecting && selected ? { background: "hsl(245 58% 61% / 0.07)" } : {}),
+  };
+
+  const borderClass = isLast ? "" : "border-b border-border";
+
+  const inner = (
     <div
-      className="flex items-center gap-3 px-4 py-3 surface-hover animate-fade-in-up"
-      style={{
-        animationDelay: `${Math.min(index * 40, 320)}ms`,
-        ...(selecting && selected ? { background: "hsl(245 58% 61% / 0.06)" } : {}),
-      }}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-secondary/60 transition-colors animate-fade-in-up ${borderClass}`}
+      style={rowStyle}
     >
       {selecting && (
         <input
@@ -156,13 +174,11 @@ function MeetingRow({
         />
       )}
 
-      {/* Status dot */}
       <span
-        className={`status-dot flex-shrink-0 ${status.pulse ? "animate-blink" : ""}`}
+        className={`status-dot ${status.pulse ? "animate-blink" : ""}`}
         style={{ background: status.color }}
       />
 
-      {/* Title + meta */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate leading-snug">
           {meeting.title ?? `${meeting.platform} meeting`}
@@ -185,19 +201,24 @@ function MeetingRow({
         </div>
       </div>
 
-      {/* Status label */}
-      <span className="text-[11px] flex-shrink-0" style={{ color: status.color }}>
+      <span className="text-[11px] flex-shrink-0 font-medium" style={{ color: status.color }}>
         {status.label}
       </span>
 
       {!selecting && (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-muted-foreground/40">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 opacity-25">
           <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
     </div>
   );
 
-  if (selecting) return <div onClick={onToggle} className="cursor-pointer">{row}</div>;
-  return <Link href={`/meetings/${meeting.id}`}>{row}</Link>;
+  if (selecting) {
+    return <div onClick={onToggle} className="cursor-pointer block">{inner}</div>;
+  }
+  return (
+    <Link href={`/meetings/${meeting.id}`} className="block">
+      {inner}
+    </Link>
+  );
 }

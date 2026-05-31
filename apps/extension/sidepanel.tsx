@@ -11,15 +11,26 @@ const ERROR_MESSAGES: Record<RecordingError, string> = {
   capture_failed: "Could not capture tab audio.",
 };
 
-const CHUNK_MS   = 5_000;
 const DEFAULT_API = "http://localhost:8000";
 const WAVE_DELAYS = [0, 140, 70, 210, 105];
 
+// ── Storage-backed recording state ─────────────────────────────────────────
+// Using storage as source of truth means the UI is correct even if the
+// sidepanel is closed and reopened mid-recording, and there is one clear
+// place that toggles the "recording" indicator.
+
+function setStorageRecording(meetingId: string) {
+  chrome.storage.local.set({ recordingState: { meetingId, status: "recording" } });
+}
+function clearStorageRecording() {
+  chrome.storage.local.remove("recordingState");
+}
+
 export default function SidePanel() {
-  const [recording, setRecording]       = useState(false);
   const [meetingId, setMeetingId]       = useState<string | null>(null);
   const [onMeet, setOnMeet]             = useState(false);
   const [error, setError]               = useState<RecordingError | null>(null);
+  const [micActive, setMicActive]       = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiUrl, setApiUrl]             = useState(DEFAULT_API);
   const [token, setToken]               = useState("");
@@ -27,31 +38,49 @@ export default function SidePanel() {
   const [audioDevices, setAudioDevices] = useState<{ deviceId: string; label: string }[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
 
-  const wsRef       = useRef<WebSocket | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioElRef  = useRef<HTMLAudioElement | null>(null);
-  const chunksRef   = useRef<Blob[]>([]);
-  const seqRef      = useRef(0);
-  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const bgPortRef   = useRef<chrome.runtime.Port | null>(null);
-  const micPortRef  = useRef<chrome.runtime.Port | null>(null);
+  // recording is derived from meetingId — non-null means we're recording.
+  const recording = meetingId !== null;
+
+  const wsRef        = useRef<WebSocket | null>(null);
+  const bgPortRef    = useRef<chrome.runtime.Port | null>(null);
+  const startingRef  = useRef(false);
+  const stoppedAtRef = useRef(0);
 
   useEffect(() => {
-    chrome.storage.local.get(["accessToken", "apiUrl", "meetTabReady", "audioDeviceId"], (s) => {
-      if (s.accessToken)   setToken(s.accessToken as string);
-      if (s.apiUrl)        setApiUrl(s.apiUrl as string);
-      if (s.audioDeviceId) setSelectedDeviceId(s.audioDeviceId as string);
-      setOnMeet(!!s.meetTabReady);
-    });
+    chrome.storage.local.get(
+      ["accessToken", "apiUrl", "meetTabReady", "audioDeviceId", "recordingState"],
+      (s) => {
+        if (s.accessToken)   setToken(s.accessToken as string);
+        if (s.apiUrl)        setApiUrl(s.apiUrl as string);
+        if (s.audioDeviceId) setSelectedDeviceId(s.audioDeviceId as string);
+        setOnMeet(!!s.meetTabReady);
+
+        // Restore recording indicator if sidepanel was reopened mid-recording.
+        if (s.recordingState?.meetingId) setMeetingId(s.recordingState.meetingId);
+      }
+    );
+
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      .then((stream) => { stream.getTracks().forEach((t) => t.stop()); return navigator.mediaDevices.enumerateDevices(); })
+      .then((devices) => {
+        setAudioDevices(devices.filter((d) => d.kind === "audioinput")
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` })));
+      })
+      .catch(() => {
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          setAudioDevices(devices.filter((d) => d.kind === "audioinput")
+            .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` })));
+        }).catch(() => {});
+      });
 
     const port = chrome.runtime.connect({ name: "sidepanel" });
     bgPortRef.current = port;
-    port.onMessage.addListener((msg: { type: string; audio_b64?: string; seq?: number }) => {
-      if (msg.type === "MIC_CHUNK" && msg.audio_b64 && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "chunk", source: "mic", audio_b64: msg.audio_b64, seq: msg.seq }));
+
+    port.onMessage.addListener((msg) => {
+      if (msg.type === "OFFSCREEN_CHUNK" && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "chunk", source: msg.source ?? "tab", audio_b64: msg.audio_b64, seq: msg.seq }));
       }
+      if (msg.type === "MIC_STATUS") setMicActive(!!msg.active);
     });
 
     chrome.runtime.sendMessage({ type: "GET_PENDING_CAPTURE" }, (resp) => {
@@ -60,9 +89,16 @@ export default function SidePanel() {
 
     const storageListener = (changes: Record<string, chrome.storage.StorageChange>) => {
       if ("meetTabReady" in changes) setOnMeet(!!changes.meetTabReady.newValue);
+
+      // Storage is the source of truth for recording state.
+      if ("recordingState" in changes) {
+        const val = changes.recordingState.newValue;
+        setMeetingId(val?.meetingId ?? null);
+      }
     };
-    const msgListener = (msg: { type: string; streamId?: string }) => {
+    const msgListener = (msg: { type: string; streamId?: string; active?: boolean }) => {
       if (msg.type === "CAPTURE_READY" && msg.streamId) startRecording(msg.streamId);
+      if (msg.type === "MIC_STATUS") setMicActive(!!msg.active);
     };
 
     chrome.storage.onChanged.addListener(storageListener);
@@ -74,126 +110,82 @@ export default function SidePanel() {
     };
   }, []);
 
-  function flushChunk() {
-    if (!chunksRef.current.length || wsRef.current?.readyState !== WebSocket.OPEN) return;
-    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-    chunksRef.current = [];
-    const seq = seqRef.current++;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const b64 = (reader.result as string).split(",")[1];
-      wsRef.current?.send(JSON.stringify({ type: "chunk", source: "tab", audio_b64: b64, seq }));
-    };
-    reader.readAsDataURL(blob);
-  }
-
   function cleanup() {
-    if (timerRef.current) clearInterval(timerRef.current);
-    recorderRef.current?.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    audioCtxRef.current?.close();
-    audioCtxRef.current = null;
-    if (audioElRef.current) {
-      audioElRef.current.pause();
-      audioElRef.current.srcObject = null;
-      audioElRef.current = null;
-    }
-    micPortRef.current?.disconnect();
-    micPortRef.current = null;
-    flushChunk();
-    wsRef.current?.send(JSON.stringify({ type: "stop" }));
-    wsRef.current?.close();
-    recorderRef.current = null;
-    wsRef.current = null;
-    streamRef.current = null;
-    chunksRef.current = [];
-    seqRef.current = 0;
-    chrome.storage.local.remove("recordingState");
-    setRecording(false);
-    setMeetingId(null);
+    stoppedAtRef.current = Date.now();
+    setMicActive(false);
+    chrome.runtime.sendMessage({ type: "STOP_OFFSCREEN" }).catch(() => {});
+    // 1.5 s drain: lets final MediaRecorder chunks (tab + mic) arrive from offscreen before closing.
+    setTimeout(() => {
+      wsRef.current?.send(JSON.stringify({ type: "stop" }));
+      wsRef.current?.close();
+      wsRef.current = null;
+    }, 1_500);
+    clearStorageRecording(); // → storage listener sets meetingId = null → recording = false
   }
 
   async function startRecording(streamId: string) {
-    setError(null);
-    const stored = await chrome.storage.local.get(["accessToken", "apiUrl"]);
-    const tok = (stored.accessToken as string | undefined) ?? token;
-    const api = (stored.apiUrl as string | undefined) ?? apiUrl;
-    if (!tok) { setError("no_token"); setShowSettings(true); return; }
+    if (meetingId !== null || startingRef.current) return;
+    if (Date.now() - stoppedAtRef.current < 3_000) return;
+    startingRef.current = true;
 
-    let mId: string;
     try {
-      const res = await fetch(`${api}/api/v1/meetings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
-        body: JSON.stringify({ platform: "google_meet", started_at: new Date().toISOString() }),
+      setError(null);
+      const stored = await chrome.storage.local.get(["accessToken", "apiUrl"]);
+      const tok = (stored.accessToken as string | undefined) ?? token;
+      const api = (stored.apiUrl as string | undefined) ?? apiUrl;
+      if (!tok) { setError("no_token"); setShowSettings(true); return; }
+
+      let mId: string;
+      try {
+        const res = await fetch(`${api}/api/v1/meetings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
+          body: JSON.stringify({ platform: "google_meet", started_at: new Date().toISOString() }),
+        });
+        if (!res.ok) { setError("api_error"); return; }
+        mId = (await res.json()).id;
+      } catch { setError("api_error"); return; }
+
+      const wsBase = api.replace(/^http/, "ws");
+      const ws = new WebSocket(`${wsBase}/api/v1/ws/${mId}`);
+      wsRef.current = ws;
+
+      const wsOk = await new Promise<boolean>((resolve) => {
+        ws.onopen = () => resolve(true);
+        ws.onerror = () => resolve(false);
       });
-      if (!res.ok) { setError("api_error"); return; }
-      mId = (await res.json()).id;
-    } catch { setError("api_error"); return; }
+      if (!wsOk) { setError("ws_error"); cleanup(); return; }
 
-    let stream: MediaStream;
-    try {
-      const tabStream = await navigator.mediaDevices.getUserMedia({
-        audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } } as MediaTrackConstraints,
-        video: false,
-      });
-      const audioEl = new Audio();
-      audioEl.srcObject = tabStream;
-      audioEl.play().catch(() => {});
-      audioElRef.current = audioEl;
-      const ctx = new AudioContext();
-      await ctx.resume();
-      audioCtxRef.current = ctx;
-      const dest = ctx.createMediaStreamDestination();
-      ctx.createMediaStreamSource(tabStream).connect(dest);
-      streamRef.current = new MediaStream([...tabStream.getTracks()]);
-      stream = dest.stream;
-    } catch { setError("capture_failed"); return; }
+      let aborted = false;
+      ws.onerror = () => { aborted = true; setError("ws_error"); cleanup(); };
+      ws.onclose = () => { if (meetingId !== null) cleanup(); };
 
-    const wsBase = api.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBase}/api/v1/ws/${mId}`);
-    wsRef.current = ws;
+      const resp = await chrome.runtime.sendMessage({
+        type: "START_OFFSCREEN", streamId,
+        micDeviceId: selectedDeviceId || undefined,
+      }).catch(() => ({ ok: false }));
 
-    ws.onopen = () => {
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
-      recorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.start();
-      timerRef.current = setInterval(flushChunk, CHUNK_MS);
-      chrome.storage.local.set({ recordingState: { meetingId: mId, status: "recording" } });
-      setMeetingId(mId);
-      setRecording(true);
+      if (aborted) return;
+      if (!resp?.ok) { setError("capture_failed"); cleanup(); return; }
 
-      setTimeout(() => chrome.tabs.query({ url: "https://meet.google.com/*" }, (tabs) => {
-        const tab = tabs.find((t) => t.id && t.status === "complete");
-        if (!tab?.id) return;
-        try {
-          const micPort = chrome.tabs.connect(tab.id, { name: "mic-audio" });
-          micPortRef.current = micPort;
-          micPort.onMessage.addListener((msg: { type: string; audio_b64?: string; seq?: number; mics?: { deviceId: string; label: string }[] }) => {
-            if (msg.type === "MIC_CHUNK" && msg.audio_b64 && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "chunk", source: "mic", audio_b64: msg.audio_b64, seq: msg.seq }));
-            }
-            if (msg.type === "DEVICE_LIST" && msg.mics) setAudioDevices(msg.mics);
-          });
-          micPort.postMessage({ type: "LIST_DEVICES" });
-          micPort.postMessage({ type: "START_MIC", deviceId: selectedDeviceId || undefined });
-        } catch (e) { console.warn("[MeetBuddy] mic:", e); }
-      }), 500);
-    };
-
-    ws.onerror = () => { setError("ws_error"); cleanup(); };
-    ws.onclose = () => { if (recording) cleanup(); };
+      // Write to storage — storageListener sets meetingId = mId → recording = true.
+      // Mic capture now happens in the offscreen document; MIC_STATUS message updates micActive.
+      setStorageRecording(mId);
+    } finally {
+      startingRef.current = false;
+    }
   }
 
   function saveSettings() {
     chrome.storage.local.set({ accessToken: token, apiUrl, audioDeviceId: selectedDeviceId }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        setAudioDevices(devices.filter((d) => d.kind === "audioinput")
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Mic ${d.deviceId.slice(0, 6)}` })));
+      }).catch(() => {});
     });
   }
-
-  const S = { padding: "0", margin: "0" } as const;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0c0c0e", color: "#ededed", display: "flex", flexDirection: "column" }}>
@@ -207,12 +199,8 @@ export default function SidePanel() {
           </svg>
         </div>
         <span style={{ fontWeight: 600, fontSize: 13 }}>MeetBuddy</span>
-        <a
-          href="http://localhost:3000/meetings"
-          target="_blank"
-          rel="noreferrer"
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#555", textDecoration: "none" }}
-        >
+        <a href="http://localhost:3000/meetings" target="_blank" rel="noreferrer"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#555", textDecoration: "none" }}>
           Dashboard <ExternalLink style={{ width: 10, height: 10 }} />
         </a>
       </div>
@@ -220,50 +208,49 @@ export default function SidePanel() {
       {/* Body */}
       <div style={{ flex: 1, padding: "16px 14px" }}>
         {recording ? (
-          /* ── Recording ── */
           <div className="animate-fade-in-up" style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 20 }}>
-            {/* Waveform */}
             <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 20, marginBottom: 14 }}>
               {WAVE_DELAYS.map((delay, i) => (
                 <div key={i} className="wave-bar" style={{ animationDelay: `${delay}ms` }} />
               ))}
             </div>
-
-            {/* Status */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
               <div className="blink-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
               <span style={{ fontSize: 13, fontWeight: 600, color: "#22c55e" }}>Recording</span>
             </div>
-
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, marginBottom: 18,
+              color: micActive ? "#22c55e" : "#f59e0b",
+              background: micActive ? "rgba(34,197,94,0.07)" : "rgba(245,158,11,0.07)",
+              border: `1px solid ${micActive ? "rgba(34,197,94,0.2)" : "rgba(245,158,11,0.2)"}`,
+              padding: "3px 8px", borderRadius: 4 }}>
+              {micActive ? <Mic style={{ width: 10, height: 10 }} /> : <MicOff style={{ width: 10, height: 10 }} />}
+              {micActive ? "Mic + Speaker" : "Speaker only — mic failed"}
+            </div>
             {meetingId && (
               <p style={{ fontSize: 10, color: "#444", fontFamily: "monospace", marginBottom: 18 }}>
                 {meetingId.slice(0, 8)}…
               </p>
             )}
-
             <p style={{ fontSize: 11, color: "#555", textAlign: "center", lineHeight: 1.65, marginBottom: 20, maxWidth: 200 }}>
-              Audio is being captured locally and will be processed after the meeting ends.
+              Capturing your mic and the meeting audio.
             </p>
-
             <button className="btn-danger" onClick={cleanup}>
-              <MicOff style={{ width: 12, height: 12 }} />
-              Stop recording
+              <MicOff style={{ width: 12, height: 12 }} /> Stop recording
             </button>
           </div>
         ) : (
-          /* ── Idle ── */
           <div className="animate-fade-in-up">
-            {/* Error */}
             {error && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", borderRadius: 6, marginBottom: 12, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b", fontSize: 11, lineHeight: 1.55 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 11px", borderRadius: 6, marginBottom: 12,
+                background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b", fontSize: 11, lineHeight: 1.55 }}>
                 <AlertCircle style={{ width: 12, height: 12, marginTop: 1, flexShrink: 0 }} />
                 {ERROR_MESSAGES[error]}
               </div>
             )}
-
-            {/* Status card */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px", borderRadius: 8, background: "#111113", border: "1px solid #222224", textAlign: "center" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a1a1c", border: "1px solid #262629", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px", borderRadius: 8,
+              background: "#111113", border: "1px solid #222224", textAlign: "center" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a1a1c", border: "1px solid #262629",
+                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
                 <MicOff style={{ width: 16, height: 16, color: "#3a3a3e" }} />
               </div>
               <p style={{ fontSize: 13, fontWeight: 600, color: "#666", marginBottom: 6 }}>Not recording</p>
@@ -283,17 +270,15 @@ export default function SidePanel() {
 
       {/* Settings */}
       <div style={{ borderTop: "1px solid #1e1e20", padding: "10px 14px" }}>
-        <button
-          onClick={() => setShowSettings((s) => !s)}
-          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#555", background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%", fontFamily: "inherit" }}
-        >
+        <button onClick={() => setShowSettings((s) => !s)}
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#555",
+            background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%", fontFamily: "inherit" }}>
           <Settings style={{ width: 12, height: 12 }} />
           Settings
           <span style={{ marginLeft: "auto" }}>
             {showSettings ? <ChevronUp style={{ width: 11, height: 11 }} /> : <ChevronDown style={{ width: 11, height: 11 }} />}
           </span>
         </button>
-
         {showSettings && (
           <div className="animate-fade-in-up" style={{ marginTop: 11, display: "flex", flexDirection: "column", gap: 9 }}>
             <div>
@@ -302,7 +287,8 @@ export default function SidePanel() {
             </div>
             <div>
               <label className="field-label">Access Token</label>
-              <input type="password" className="ext-input" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your API token" />
+              <input type="password" className="ext-input" value={token}
+                onChange={(e) => setToken(e.target.value)} placeholder="Paste your API token" />
             </div>
             {audioDevices.length > 0 && (
               <div>
@@ -321,7 +307,6 @@ export default function SidePanel() {
           </div>
         )}
       </div>
-
     </div>
   );
 }

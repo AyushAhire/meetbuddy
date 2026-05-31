@@ -5,8 +5,11 @@ Each task is idempotent — safe to retry.
 import asyncio
 import logging
 import uuid
+from contextlib import asynccontextmanager
 
 from celery import chain
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from tasks.celery_app import celery_app
 
@@ -20,7 +23,41 @@ logger = logging.getLogger(__name__)
 
 def _run(coro):
     """Run async code from a sync Celery task."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
+
+
+@asynccontextmanager
+async def task_db():
+    """Fresh DB session per Celery task.
+
+    asyncio.run() creates a new event loop for every task, which invalidates
+    any connection pool bound to a previous loop. NullPool avoids pooling
+    entirely so there are no cross-loop futures.
+    """
+    from config import settings
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            yield session
+    finally:
+        await engine.dispose()
+
+
+def _mark_failed(meeting_id: str) -> None:
+    from models.meeting import Meeting
+
+    async def _run_async():
+        async with task_db() as db:
+            meeting = await db.get(Meeting, uuid.UUID(meeting_id))
+            if meeting:
+                meeting.status = "failed"
+                await db.commit()
+                logger.error("Meeting %s marked as failed after exhausting retries", meeting_id)
+    try:
+        asyncio.run(_run_async())
+    except Exception:
+        logger.exception("Could not mark meeting %s as failed", meeting_id)
 
 
 def process_meeting(meeting_id: str) -> None:
@@ -37,12 +74,11 @@ def process_meeting(meeting_id: str) -> None:
 @celery_app.task(name="tasks.transcribe_audio", bind=True, max_retries=3)
 def transcribe_audio(self, meeting_id: str) -> None:
     """Download audio, run faster-whisper, persist segments to DB."""
-    from database import AsyncSessionFactory
     from models.meeting import Meeting
     from services.transcription import store_transcript, transcribe_audio_file
 
     async def _run_async():
-        async with AsyncSessionFactory() as db:
+        async with task_db() as db:
             meeting = await db.get(Meeting, uuid.UUID(meeting_id))
             if not meeting or not meeting.audio_url:
                 logger.warning("Meeting %s has no audio_url, skipping transcription", meeting_id)
@@ -51,11 +87,9 @@ def transcribe_audio(self, meeting_id: str) -> None:
             meeting.status = "processing"
             await db.commit()
 
-            # Transcribe tab audio (remote participants)
             tab_segments = await transcribe_audio_file(meeting.audio_url)
             logger.info("Tab transcription: %d segments", len(tab_segments))
 
-            # Transcribe mic audio if it exists (local speaker)
             mic_key = meeting.audio_url.replace("/tab.webm", "/mic.webm")
             mic_segments: list[dict] = []
             try:
@@ -66,7 +100,6 @@ def transcribe_audio(self, meeting_id: str) -> None:
             except Exception:
                 pass
 
-            # Merge and sort by start time
             all_segments = sorted(tab_segments + mic_segments, key=lambda s: s["start"])
 
             transcript_key = await store_transcript(uuid.UUID(meeting_id), all_segments)
@@ -78,6 +111,8 @@ def transcribe_audio(self, meeting_id: str) -> None:
         _run(_run_async())
     except Exception as exc:
         logger.exception("transcribe_audio failed for %s", meeting_id)
+        if self.request.retries >= self.max_retries:
+            _mark_failed(meeting_id)
         raise self.retry(exc=exc, countdown=30)
 
 
@@ -86,13 +121,12 @@ def store_and_embed_chunks(self, meeting_id: str) -> None:
     """Load transcript from storage, create Chunk rows with embeddings."""
     import json
 
-    from database import AsyncSessionFactory
     from models.meeting import Chunk, Meeting
     from services.transcription import embed_texts
     from utils.storage import download_file
 
     async def _run_async():
-        async with AsyncSessionFactory() as db:
+        async with task_db() as db:
             meeting = await db.get(Meeting, uuid.UUID(meeting_id))
             if not meeting or not meeting.transcript_url:
                 return
@@ -121,6 +155,8 @@ def store_and_embed_chunks(self, meeting_id: str) -> None:
         _run(_run_async())
     except Exception as exc:
         logger.exception("store_and_embed_chunks failed for %s", meeting_id)
+        if self.request.retries >= self.max_retries:
+            _mark_failed(meeting_id)
         raise self.retry(exc=exc, countdown=30)
 
 
@@ -129,13 +165,12 @@ def extract_insights_task(self, meeting_id: str) -> None:
     """Run LLM extraction and store results in meeting_insights table."""
     import json
 
-    from database import AsyncSessionFactory
     from models.meeting import Meeting, MeetingInsights
     from services.llm import extract_insights
     from utils.storage import download_file
 
     async def _run_async():
-        async with AsyncSessionFactory() as db:
+        async with task_db() as db:
             meeting = await db.get(Meeting, uuid.UUID(meeting_id))
             if not meeting or not meeting.transcript_url:
                 return
@@ -166,17 +201,18 @@ def extract_insights_task(self, meeting_id: str) -> None:
         _run(_run_async())
     except Exception as exc:
         logger.exception("extract_insights_task failed for %s", meeting_id)
+        if self.request.retries >= self.max_retries:
+            _mark_failed(meeting_id)
         raise self.retry(exc=exc, countdown=60)
 
 
 @celery_app.task(name="tasks.mark_complete", bind=True, max_retries=3)
 def mark_complete(self, meeting_id: str) -> None:
     """Set meeting status to 'done'."""
-    from database import AsyncSessionFactory
     from models.meeting import Meeting
 
     async def _run_async():
-        async with AsyncSessionFactory() as db:
+        async with task_db() as db:
             meeting = await db.get(Meeting, uuid.UUID(meeting_id))
             if meeting:
                 meeting.status = "done"

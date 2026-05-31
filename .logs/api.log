@@ -1,0 +1,402 @@
+INFO:     Started server process [26908]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:38500 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59882 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59246 - "POST /api/v1/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59246 - "POST /api/v1/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59246 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59248 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59248 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59248 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43292 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:41440 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:41454 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:41468 - "WebSocket /api/v1/ws/91c95801-94fb-427e-9fb7-4fa6766e185e" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:50510 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50514 - "POST /api/v1/upload/audio?meeting_id=06f2fa9b-e02f-4cc2-a532-7f5f97033d25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50528 - "POST /api/v1/upload/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50510 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58008 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58010 - "OPTIONS /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58010 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53476 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53476 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57434 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "OPTIONS /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43486 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43486 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56822 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35534 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35534 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35008 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45188 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44162 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45018 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34654 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34746 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45618 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34746 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34746 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34746 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45630 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:34746 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44534 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:44548 - "WebSocket /api/v1/ws/4b843e42-73a2-4786-8841-6589bdbca72e" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:37686 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37692 - "GET /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37702 - "OPTIONS /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37702 - "GET /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33910 - "GET /api/v1/meetings/b187d459-dba9-45ca-8740-5dd4384391c1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46480 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46488 - "POST /api/v1/upload/audio?meeting_id=b187d459-dba9-45ca-8740-5dd4384391c1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46494 - "POST /api/v1/upload/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46480 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45498 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45506 - "GET /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45510 - "GET /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57454 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57454 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44252 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58974 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46784 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39936 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40268 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58490 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48840 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33246 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53542 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34432 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55192 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44748 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50744 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59468 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46642 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43388 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33574 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38232 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52998 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48386 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54498 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49862 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39340 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54208 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53334 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60054 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60054 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60544 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50852 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60838 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42758 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36584 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43452 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56724 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41770 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35586 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35596 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:50962 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:50968 - "WebSocket /api/v1/ws/b140f038-f3f8-41ce-a8e4-40d44fb3a500" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:42808 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42814 - "POST /api/v1/upload/audio?meeting_id=1f0c2a33-6787-49b5-9bf5-4831f0d0ec92 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42816 - "POST /api/v1/upload/complete HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42808 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48350 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53986 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41818 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49212 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33964 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51622 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41302 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36868 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46960 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54548 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51148 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42966 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42768 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50796 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57032 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39976 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39900 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44350 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58458 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54082 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46898 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47440 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33156 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41124 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54974 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49598 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46412 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44528 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52076 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46008 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47598 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51766 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36302 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50820 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57480 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42822 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44268 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44240 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37232 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44600 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42946 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53272 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54434 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58164 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52506 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52506 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56810 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35656 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52984 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38628 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37194 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49044 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43788 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59726 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54952 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47922 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58206 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52446 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40374 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44440 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56210 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37638 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36786 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59758 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44196 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54824 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57858 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "OPTIONS /api/v1/meetings/b140f038-f3f8-41ce-a8e4-40d44fb3a500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38654 - "OPTIONS /api/v1/meetings/1f0c2a33-6787-49b5-9bf5-4831f0d0ec92 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38664 - "OPTIONS /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38678 - "OPTIONS /api/v1/meetings/b187d459-dba9-45ca-8740-5dd4384391c1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38686 - "OPTIONS /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38690 - "OPTIONS /api/v1/meetings/06f2fa9b-e02f-4cc2-a532-7f5f97033d25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "OPTIONS /api/v1/meetings/5e087d29-c40e-4a53-b868-bb82eceda530 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "DELETE /api/v1/meetings/b140f038-f3f8-41ce-a8e4-40d44fb3a500 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38690 - "DELETE /api/v1/meetings/1f0c2a33-6787-49b5-9bf5-4831f0d0ec92 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38678 - "DELETE /api/v1/meetings/b187d459-dba9-45ca-8740-5dd4384391c1 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38664 - "DELETE /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38686 - "DELETE /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38654 - "DELETE /api/v1/meetings/06f2fa9b-e02f-4cc2-a532-7f5f97033d25 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38640 - "DELETE /api/v1/meetings/5e087d29-c40e-4a53-b868-bb82eceda530 HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:38640 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38706 - "GET /api/v1/meetings/f2a42565-fac3-42e1-862e-8396cb3589e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "OPTIONS /api/v1/meetings/f2a42565-fac3-42e1-862e-8396cb3589e3/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "GET /api/v1/meetings/f2a42565-fac3-42e1-862e-8396cb3589e3/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "OPTIONS /api/v1/meetings/f2a42565-fac3-42e1-862e-8396cb3589e3/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38640 - "GET /api/v1/meetings/f2a42565-fac3-42e1-862e-8396cb3589e3/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38712 - "GET /api/v1/meetings/4b843e42-73a2-4786-8841-6589bdbca72e HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57550 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57550 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36144 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:36152 - "WebSocket /api/v1/ws/7b97efdf-267c-49b7-bdf1-d5adfe672624" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47716 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:47726 - "GET /api/v1/meetings/7b97efdf-267c-49b7-bdf1-d5adfe672624 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47716 - "OPTIONS /api/v1/meetings/7b97efdf-267c-49b7-bdf1-d5adfe672624/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47716 - "GET /api/v1/meetings/7b97efdf-267c-49b7-bdf1-d5adfe672624/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47716 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /api/v1/meetings/7b97efdf-267c-49b7-bdf1-d5adfe672624 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55324 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55324 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59320 - "GET /api/v1/meetings/7b97efdf-267c-49b7-bdf1-d5adfe672624 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55324 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55324 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52626 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52632 - "WebSocket /api/v1/ws/f34fdc5c-30ea-4c9f-a3cb-9c287f461284" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:48640 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50160 - "GET /api/v1/meetings/f34fdc5c-30ea-4c9f-a3cb-9c287f461284 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48640 - "OPTIONS /api/v1/meetings/f34fdc5c-30ea-4c9f-a3cb-9c287f461284/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48640 - "GET /api/v1/meetings/f34fdc5c-30ea-4c9f-a3cb-9c287f461284/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50160 - "GET /api/v1/meetings/7b97efdf-267c-49b7-bdf1-d5adfe672624 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48640 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50160 - "GET /api/v1/meetings/f34fdc5c-30ea-4c9f-a3cb-9c287f461284 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48640 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45302 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42340 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47058 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:47060 - "WebSocket /api/v1/ws/ab2a4677-c19d-40a7-94db-ffa3b44b10a8" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:54302 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54316 - "GET /api/v1/meetings/ab2a4677-c19d-40a7-94db-ffa3b44b10a8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54316 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55960 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:55974 - "WebSocket /api/v1/ws/6ec869a9-003d-467a-adea-c679a1100392" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:33868 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33868 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33868 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56458 - "GET /api/v1/meetings/6ec869a9-003d-467a-adea-c679a1100392 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33868 - "OPTIONS /api/v1/meetings/6ec869a9-003d-467a-adea-c679a1100392/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33868 - "GET /api/v1/meetings/6ec869a9-003d-467a-adea-c679a1100392/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33868 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33868 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47434 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:47444 - "WebSocket /api/v1/ws/dec2398c-691e-4451-b150-e00971ceb854" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:41900 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41908 - "GET /api/v1/meetings/dec2398c-691e-4451-b150-e00971ceb854 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41908 - "GET /api/v1/meetings/6ec869a9-003d-467a-adea-c679a1100392 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41900 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41900 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47548 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57972 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38532 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45824 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58912 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59320 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36626 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56894 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52402 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40600 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54940 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33954 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36786 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47020 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51568 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33472 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36034 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53488 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37228 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46070 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33962 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51342 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33580 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47314 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53038 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33436 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38108 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60702 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46792 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49202 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54192 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55604 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49076 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59280 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48092 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34778 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35578 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45156 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45164 - "GET /api/v1/meetings/dec2398c-691e-4451-b150-e00971ceb854 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45164 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:33078 - "POST /api/v1/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33078 - "GET /api/v1/meetings/91c95801-94fb-427e-9fb7-4fa6766e185e HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:33078 - "POST /api/v1/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33094 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33094 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33078 - "POST /api/v1/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33078 - "POST /api/v1/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33078 - "GET /api/v1/meetings/dec2398c-691e-4451-b150-e00971ceb854 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33094 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40496 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40496 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34930 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60578 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60594 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60594 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47520 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:47520 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59058 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50456 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:39554 - "POST /api/v1/meetings HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:35568 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41518 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:41522 - "WebSocket /api/v1/ws/2a35afca-86de-47c0-ad02-62c7b2d2732c" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:42386 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53334 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42386 - "OPTIONS /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42386 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42386 - "OPTIONS /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42386 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34316 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34314 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34314 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34314 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34314 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58732 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44274 - "GET /api/v1/meetings/8ea3cc33-334d-421d-bc82-e6242a4e6234 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44274 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44274 - "GET /api/v1/meetings/97dfa4dd-9316-452a-8aa7-e61d5a07dbfc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "OPTIONS /api/v1/meetings/97dfa4dd-9316-452a-8aa7-e61d5a07dbfc/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58722 - "GET /api/v1/meetings/97dfa4dd-9316-452a-8aa7-e61d5a07dbfc/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41410 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59368 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:59382 - "WebSocket /api/v1/ws/a4894ab4-cb70-4cb4-af91-b1e10d1be8bd" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:35240 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35240 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/audio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35240 - "GET /api/v1/meetings/2a35afca-86de-47c0-ad02-62c7b2d2732c/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53220 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53220 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53228 - "GET /api/v1/meetings/a4894ab4-cb70-4cb4-af91-b1e10d1be8bd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53220 - "OPTIONS /api/v1/meetings/a4894ab4-cb70-4cb4-af91-b1e10d1be8bd/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53220 - "GET /api/v1/meetings/a4894ab4-cb70-4cb4-af91-b1e10d1be8bd/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53220 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53220 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60374 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:60380 - "WebSocket /api/v1/ws/496db41d-10f7-49f4-b8bc-8ac8635bd4e0" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:41418 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33134 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:33146 - "WebSocket /api/v1/ws/3037d1a7-b33e-44ee-b4c0-93ff395bfcb4" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:48296 - "OPTIONS /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48296 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48300 - "GET /api/v1/meetings/496db41d-10f7-49f4-b8bc-8ac8635bd4e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48316 - "GET /api/v1/meetings/3037d1a7-b33e-44ee-b4c0-93ff395bfcb4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "OPTIONS /api/v1/meetings/3037d1a7-b33e-44ee-b4c0-93ff395bfcb4/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "GET /api/v1/meetings/3037d1a7-b33e-44ee-b4c0-93ff395bfcb4/transcript HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40360 - "GET /api/v1/meetings/3037d1a7-b33e-44ee-b4c0-93ff395bfcb4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48304 - "GET /api/v1/meetings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45626 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:45638 - "WebSocket /api/v1/ws/dd32cc8f-9534-4703-9580-dcecfda5b0b8" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:41072 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:41080 - "WebSocket /api/v1/ws/6af277e6-7433-428d-83f5-ce58c62580e6" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:59772 - "POST /api/v1/meetings HTTP/1.1" 201 Created
+INFO:     127.0.0.1:59780 - "WebSocket /api/v1/ws/99b7f457-625b-4dd8-a2b7-9438e0d074dd" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [26908]

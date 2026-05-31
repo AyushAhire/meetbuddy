@@ -1,0 +1,14 @@
+[Unit]
+Description=MeetBuddy PipeWire audio capture daemon
+After=pipewire.service pipewire-pulse.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=%h/meetbuddy/apps/capture/capture.py --daemon
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
