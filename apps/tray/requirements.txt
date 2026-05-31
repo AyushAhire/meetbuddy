@@ -1,4 +1,5 @@
 # MeetBuddy tray app dependencies
 pystray
 pillow
+pywebview
 # httpx is required by capture.py (already installed in apps/api/.venv)
