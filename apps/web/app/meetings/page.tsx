@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { MeetingsList } from "./meetings-list";
 import { CopyTokenButton } from "./copy-token-button";
-import { RecordingControl } from "@/app/components/recording-control";
+import { BrowserRecorder } from "@/app/components/browser-recorder";
 
 export default async function MeetingsPage() {
   const session = await auth();
@@ -28,7 +28,7 @@ export default async function MeetingsPage() {
         <a href="/query" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
           Ask AI
         </a>
-        <RecordingControl token={accessToken} />
+        <BrowserRecorder token={accessToken} />
         <CopyTokenButton token={accessToken} />
         <span className="text-xs text-muted-foreground hidden sm:block">{session.user?.email}</span>
       </header>

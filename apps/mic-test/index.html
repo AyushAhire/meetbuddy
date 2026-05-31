@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MeetBuddy — Mic Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0c0c0e; color: #ededed; font-family: system-ui, sans-serif;
+           display: flex; flex-direction: column; align-items: center;
+           padding: 40px 20px; min-height: 100vh; gap: 24px; }
+    h1  { font-size: 18px; font-weight: 600; color: #ededed; }
+    p   { font-size: 12px; color: #666; text-align: center; max-width: 400px; line-height: 1.6; }
+
+    .card { background: #111113; border: 1px solid #222224; border-radius: 10px;
+            padding: 20px; width: 100%; max-width: 420px; display: flex;
+            flex-direction: column; gap: 14px; }
+    .card h2 { font-size: 13px; font-weight: 600; color: #aaa; }
+
+    .row   { display: flex; align-items: center; gap: 10px; }
+    label  { font-size: 11px; color: #888; flex: 1; }
+    select { background: #1a1a1c; border: 1px solid #333; color: #ededed;
+             font-size: 11px; padding: 5px 8px; border-radius: 5px; flex: 2; }
+
+    .toggle { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; }
+    .toggle input { width: 14px; height: 14px; cursor: pointer; accent-color: #6366f1; }
+
+    /* meter */
+    .meter-wrap { height: 10px; background: #1a1a1c; border-radius: 5px; overflow: hidden; }
+    .meter-bar  { height: 100%; width: 0%; background: #22c55e;
+                  transition: width 60ms linear; border-radius: 5px; }
+
+    button { padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer;
+             font-size: 12px; font-weight: 600; font-family: inherit; }
+    .btn-rec  { background: #6366f1; color: #fff; }
+    .btn-stop { background: #ef4444; color: #fff; }
+    .btn-play { background: #1a1a1c; color: #ededed; border: 1px solid #333; }
+    button:disabled { opacity: 0.4; cursor: default; }
+
+    .status { font-size: 11px; padding: 7px 11px; border-radius: 5px; }
+    .status.ok  { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #22c55e; }
+    .status.err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #ef4444; }
+    .status.inf { background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); color: #818cf8; }
+    .status.warn{ background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); color: #f59e0b; }
+
+    audio { width: 100%; border-radius: 6px; height: 32px; }
+    audio::-webkit-media-controls-panel { background: #1a1a1c; }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip  { font-size: 10px; padding: 3px 8px; border-radius: 20px;
+             background: #1a1a1c; border: 1px solid #2a2a2e; color: #666; cursor: pointer; }
+    .chip.active { border-color: #6366f1; color: #818cf8; background: rgba(99,102,241,0.08); }
+  </style>
+</head>
+<body>
+  <h1>MeetBuddy — Mic Capture Diagnostic</h1>
+  <p>Tests mic capture with the same settings the extension uses. Use this to confirm mic works before troubleshooting the extension.</p>
+
+  <!-- Device picker -->
+  <div class="card">
+    <h2>1 · Select microphone</h2>
+    <div class="row">
+      <label>Device</label>
+      <select id="devSel"><option value="">Default microphone</option></select>
+    </div>
+    <div id="permStatus" class="status inf">Click "Load devices" to check permission</div>
+    <button class="btn-play" onclick="loadDevices()">Load devices</button>
+  </div>
+
+  <!-- EC settings -->
+  <div class="card">
+    <h2>2 · Echo cancellation preset</h2>
+    <p style="margin-top:-6px">Test with different settings to find which one actually captures your voice.</p>
+    <div class="chips" id="presetChips">
+      <div class="chip active" data-preset="off">EC off (extension default)</div>
+      <div class="chip" data-preset="on">EC on (browser default)</div>
+      <div class="chip" data-preset="bare">Bare — no constraints</div>
+    </div>
+    <div id="presetDesc" class="status inf" style="margin-top:4px">
+      echoCancellation: false · noiseSuppression: false · autoGainControl: false
+    </div>
+  </div>
+
+  <!-- Record -->
+  <div class="card">
+    <h2>3 · Record &amp; play back</h2>
+    <div class="meter-wrap"><div class="meter-bar" id="meterBar"></div></div>
+    <div id="recStatus" class="status inf">Idle</div>
+    <div class="row">
+      <button class="btn-rec" id="btnRec" onclick="startRec()">● Record (5 s)</button>
+      <button class="btn-stop" id="btnStop" onclick="stopRec()" disabled>■ Stop</button>
+    </div>
+    <audio id="playback" controls style="display:none"></audio>
+  </div>
+
+  <!-- Raw info -->
+  <div class="card">
+    <h2>Debug info</h2>
+    <pre id="debug" style="font-size:10px;color:#555;white-space:pre-wrap;line-height:1.5">—</pre>
+  </div>
+
+<script>
+const PRESETS = {
+  off:  { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+  on:   { echoCancellation: true,  noiseSuppression: true,  autoGainControl: true  },
+  bare: true,
+};
+const PRESET_LABELS = {
+  off:  "echoCancellation: false · noiseSuppression: false · autoGainControl: false",
+  on:   "echoCancellation: true  · noiseSuppression: true  · autoGainControl: true",
+  bare: "No audio constraints — bare getUserMedia({ audio: true })",
+};
+
+let currentPreset = "off";
+let mediaRecorder = null;
+let chunks = [];
+let stream = null;
+let analyser = null;
+let animFrame = null;
+let autoStopTimer = null;
+
+// Preset chips
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    currentPreset = chip.dataset.preset;
+    document.getElementById("presetDesc").textContent = PRESET_LABELS[currentPreset];
+  });
+});
+
+function log(msg) {
+  const el = document.getElementById("debug");
+  el.textContent = (el.textContent === "—" ? "" : el.textContent) + msg + "\n";
+  console.log(msg);
+}
+
+async function loadDevices() {
+  const permEl = document.getElementById("permStatus");
+  permEl.className = "status inf";
+  permEl.textContent = "Requesting permission…";
+  try {
+    const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    probe.getTracks().forEach(t => t.stop());
+    permEl.className = "status ok";
+    permEl.textContent = "Microphone permission granted ✓";
+  } catch(e) {
+    permEl.className = "status err";
+    permEl.textContent = "Permission denied: " + e.message;
+    log("getUserMedia error: " + e.name + " — " + e.message);
+    return;
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const mics = devices.filter(d => d.kind === "audioinput");
+  const sel = document.getElementById("devSel");
+  sel.innerHTML = '<option value="">Default microphone</option>';
+  mics.forEach(d => {
+    const opt = document.createElement("option");
+    opt.value = d.deviceId;
+    opt.textContent = d.label || "Mic " + d.deviceId.slice(0,8);
+    sel.appendChild(opt);
+  });
+  log("Found " + mics.length + " mic(s):");
+  mics.forEach(d => log("  " + (d.label || d.deviceId)));
+}
+
+async function startRec() {
+  const sel = document.getElementById("devSel");
+  const devId = sel.value;
+  const preset = PRESETS[currentPreset];
+
+  let audioConstraints;
+  if (preset === true) {
+    audioConstraints = true;
+  } else {
+    audioConstraints = { ...preset };
+    if (devId) audioConstraints.deviceId = devId;
+  }
+
+  const recStatus = document.getElementById("recStatus");
+  recStatus.className = "status inf";
+  recStatus.textContent = "Opening mic…";
+  log("\n--- New recording ---");
+  log("Preset: " + currentPreset);
+  log("Device: " + (devId || "default"));
+  log("Constraints: " + JSON.stringify(audioConstraints));
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+  } catch(e) {
+    recStatus.className = "status err";
+    recStatus.textContent = "getUserMedia failed: " + e.name + " — " + e.message;
+    log("ERROR: " + e.name + " — " + e.message);
+    return;
+  }
+
+  const track = stream.getAudioTracks()[0];
+  log("Track label: " + track.label);
+  log("Track settings: " + JSON.stringify(track.getSettings()));
+
+  // Meter
+  const ctx = new AudioContext();
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  const meterBar = document.getElementById("meterBar");
+  function drawMeter() {
+    analyser.getByteFrequencyData(buf);
+    const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
+    const pct = Math.min(100, avg * 3);
+    meterBar.style.width = pct + "%";
+    meterBar.style.background = pct > 50 ? "#22c55e" : pct > 15 ? "#f59e0b" : "#ef4444";
+    animFrame = requestAnimationFrame(drawMeter);
+  }
+  drawMeter();
+
+  chunks = [];
+  mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    const url  = URL.createObjectURL(blob);
+    const audio = document.getElementById("playback");
+    audio.src = url;
+    audio.style.display = "block";
+    log("Recording done — " + (blob.size / 1024).toFixed(1) + " KB");
+    recStatus.className = blob.size > 2048 ? "status ok" : "status warn";
+    recStatus.textContent = blob.size > 2048
+      ? "Recorded " + (blob.size/1024).toFixed(1) + " KB — play it back above"
+      : "File is very small (" + blob.size + " B) — mic may be silent";
+  };
+  mediaRecorder.start(1000);
+
+  document.getElementById("btnRec").disabled = true;
+  document.getElementById("btnStop").disabled = false;
+  recStatus.className = "status ok";
+  recStatus.textContent = "Recording… speak now";
+
+  autoStopTimer = setTimeout(stopRec, 8000);
+}
+
+function stopRec() {
+  clearTimeout(autoStopTimer);
+  cancelAnimationFrame(animFrame);
+  document.getElementById("meterBar").style.width = "0%";
+  document.getElementById("btnRec").disabled = false;
+  document.getElementById("btnStop").disabled = true;
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  stream?.getTracks().forEach(t => t.stop());
+  stream = null;
+}
+
+// Auto-load on page open
+window.addEventListener("load", loadDevices);
+</script>
+</body>
+</html>

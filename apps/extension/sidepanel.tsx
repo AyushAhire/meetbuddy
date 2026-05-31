@@ -30,6 +30,7 @@ export default function SidePanel() {
   const [meetingId, setMeetingId]       = useState<string | null>(null);
   const [onMeet, setOnMeet]             = useState(false);
   const [error, setError]               = useState<RecordingError | null>(null);
+  const [micActive, setMicActive]       = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiUrl, setApiUrl]             = useState(DEFAULT_API);
   const [token, setToken]               = useState("");
@@ -42,9 +43,6 @@ export default function SidePanel() {
 
   const wsRef        = useRef<WebSocket | null>(null);
   const bgPortRef    = useRef<chrome.runtime.Port | null>(null);
-  const micRecorder  = useRef<MediaRecorder | null>(null);
-  const micStream    = useRef<MediaStream | null>(null);
-  const micSeq       = useRef(0);
   const startingRef  = useRef(false);
   const stoppedAtRef = useRef(0);
 
@@ -82,6 +80,7 @@ export default function SidePanel() {
       if (msg.type === "OFFSCREEN_CHUNK" && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "chunk", source: msg.source ?? "tab", audio_b64: msg.audio_b64, seq: msg.seq }));
       }
+      if (msg.type === "MIC_STATUS") setMicActive(!!msg.active);
     });
 
     chrome.runtime.sendMessage({ type: "GET_PENDING_CAPTURE" }, (resp) => {
@@ -97,11 +96,9 @@ export default function SidePanel() {
         setMeetingId(val?.meetingId ?? null);
       }
     };
-    const msgListener = (msg: { type: string; streamId?: string; muted?: boolean }) => {
+    const msgListener = (msg: { type: string; streamId?: string; active?: boolean }) => {
       if (msg.type === "CAPTURE_READY" && msg.streamId) startRecording(msg.streamId);
-      if (msg.type === "MIC_MUTE_CHANGED") {
-        micStream.current?.getAudioTracks().forEach((t) => { t.enabled = !msg.muted; });
-      }
+      if (msg.type === "MIC_STATUS") setMicActive(!!msg.active);
     };
 
     chrome.storage.onChanged.addListener(storageListener);
@@ -115,13 +112,9 @@ export default function SidePanel() {
 
   function cleanup() {
     stoppedAtRef.current = Date.now();
+    setMicActive(false);
     chrome.runtime.sendMessage({ type: "STOP_OFFSCREEN" }).catch(() => {});
-    micRecorder.current?.stop();
-    micStream.current?.getTracks().forEach((t) => t.stop());
-    micRecorder.current = null;
-    micStream.current = null;
-    micSeq.current = 0;
-    // 1.5 s drain: lets final MediaRecorder chunks (tab + mic) arrive before closing.
+    // 1.5 s drain: lets final MediaRecorder chunks (tab + mic) arrive from offscreen before closing.
     setTimeout(() => {
       wsRef.current?.send(JSON.stringify({ type: "stop" }));
       wsRef.current?.close();
@@ -175,30 +168,8 @@ export default function SidePanel() {
       if (aborted) return;
       if (!resp?.ok) { setError("capture_failed"); cleanup(); return; }
 
-      // Mic capture — runs in the sidepanel where the user already granted permission.
-      try {
-        const ms = await navigator.mediaDevices.getUserMedia({
-          audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
-          video: false,
-        });
-        micStream.current = ms;
-        const mr = new MediaRecorder(ms, { mimeType: "audio/webm;codecs=opus" });
-        micRecorder.current = mr;
-        mr.ondataavailable = (e) => {
-          if (e.data.size === 0 || wsRef.current?.readyState !== WebSocket.OPEN) return;
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const b64 = (reader.result as string).split(",")[1];
-            wsRef.current?.send(JSON.stringify({ type: "chunk", source: "mic", audio_b64: b64, seq: micSeq.current++ }));
-          };
-          reader.readAsDataURL(e.data);
-        };
-        mr.start(5_000);
-      } catch (e) {
-        console.warn("[MeetBuddy] mic capture failed:", e);
-      }
-
       // Write to storage — storageListener sets meetingId = mId → recording = true.
+      // Mic capture now happens in the offscreen document; MIC_STATUS message updates micActive.
       setStorageRecording(mId);
     } finally {
       startingRef.current = false;
@@ -248,9 +219,12 @@ export default function SidePanel() {
               <span style={{ fontSize: 13, fontWeight: 600, color: "#22c55e" }}>Recording</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, marginBottom: 18,
-              color: "#22c55e", background: "rgba(34,197,94,0.07)",
-              border: "1px solid rgba(34,197,94,0.2)", padding: "3px 8px", borderRadius: 4 }}>
-              <Mic style={{ width: 10, height: 10 }} /> Mic + Speaker
+              color: micActive ? "#22c55e" : "#f59e0b",
+              background: micActive ? "rgba(34,197,94,0.07)" : "rgba(245,158,11,0.07)",
+              border: `1px solid ${micActive ? "rgba(34,197,94,0.2)" : "rgba(245,158,11,0.2)"}`,
+              padding: "3px 8px", borderRadius: 4 }}>
+              {micActive ? <Mic style={{ width: 10, height: 10 }} /> : <MicOff style={{ width: 10, height: 10 }} />}
+              {micActive ? "Mic + Speaker" : "Speaker only — mic failed"}
             </div>
             {meetingId && (
               <p style={{ fontSize: 10, color: "#444", fontFamily: "monospace", marginBottom: 18 }}>

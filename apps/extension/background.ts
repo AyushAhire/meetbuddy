@@ -1,7 +1,8 @@
 const MEET_PATTERN = /https:\/\/meet\.google\.com\/.+/;
 
-let pendingCapture: { streamId: string; ts: number } | null = null;
+let pendingCapture: { streamId: string; tabId: number; ts: number } | null = null;
 let sidepanelPort: chrome.runtime.Port | null = null;
+let activeMeetTabId: number | null = null;
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "sidepanel") {
@@ -49,7 +50,8 @@ chrome.action.onClicked.addListener(async (tab) => {
       console.error("[MeetBuddy] getMediaStreamId:", chrome.runtime.lastError.message);
       return;
     }
-    pendingCapture = { streamId, ts: Date.now() };
+    activeMeetTabId = tab.id!;
+    pendingCapture = { streamId, tabId: tab.id!, ts: Date.now() };
     chrome.runtime.sendMessage({ type: "CAPTURE_READY", streamId }).catch(() => {});
   });
 });
@@ -69,7 +71,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "OFFSCREEN_CHUNK") {
-    sidepanelPort?.postMessage({ type: "OFFSCREEN_CHUNK", audio_b64: msg.audio_b64, seq: msg.seq });
+    sidepanelPort?.postMessage({ type: "OFFSCREEN_CHUNK", audio_b64: msg.audio_b64, seq: msg.seq, source: msg.source });
+    return false;
+  }
+
+  if (msg.type === "MIC_STATUS") {
+    sidepanelPort?.postMessage({ type: "MIC_STATUS", active: msg.active, error: msg.error });
+    return false;
+  }
+
+  if (msg.type === "MIC_CHUNK") {
+    sidepanelPort?.postMessage({ type: "OFFSCREEN_CHUNK", audio_b64: msg.audio_b64, seq: msg.seq, source: "mic" });
     return false;
   }
 
@@ -80,6 +92,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === "STOP_OFFSCREEN") {
     chrome.runtime.sendMessage({ type: "OFFSCREEN_STOP" }).catch(() => {});
+    if (activeMeetTabId !== null) chrome.tabs.sendMessage(activeMeetTabId, { type: "STOP_MIC" }).catch(() => {});
     chrome.storage.local.remove("recordingState");
     sendResponse({ ok: true });
     return false;
@@ -87,6 +100,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === "STOP_RECORDING") {
     chrome.runtime.sendMessage({ type: "OFFSCREEN_STOP" }).catch(() => {});
+    if (activeMeetTabId !== null) chrome.tabs.sendMessage(activeMeetTabId, { type: "STOP_MIC" }).catch(() => {});
     chrome.storage.local.remove("recordingState");
     sendResponse({ ok: true });
     return false;
@@ -104,7 +118,7 @@ async function handleStartOffscreen(msg: { streamId: string; micDeviceId?: strin
         chrome.offscreen.Reason.USER_MEDIA,
         chrome.offscreen.Reason.AUDIO_PLAYBACK,
       ],
-      justification: "Capture and mix tab and microphone audio for meeting recording",
+      justification: "Capture tab audio for meeting recording",
     });
   }
 
@@ -114,6 +128,16 @@ async function handleStartOffscreen(msg: { streamId: string; micDeviceId?: strin
   await chrome.runtime.sendMessage({
     type: "OFFSCREEN_START",
     streamId: msg.streamId,
-    micDeviceId: msg.micDeviceId,
   });
+
+  // Mic capture runs in the content script (Google Meet tab) — the only MV3
+  // context where getUserMedia for the microphone works reliably.
+  if (activeMeetTabId !== null) {
+    chrome.tabs.sendMessage(activeMeetTabId, {
+      type: "START_MIC",
+      micDeviceId: msg.micDeviceId,
+    }).catch(() => {
+      sidepanelPort?.postMessage({ type: "MIC_STATUS", active: false, error: "content script unavailable" });
+    });
+  }
 }

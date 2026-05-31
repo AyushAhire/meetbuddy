@@ -439,7 +439,7 @@ async def run_oneshot(args, mic_node, mic_desc, sinks, mon_desc):
     print(f"  Meeting : {meeting_id}\n  Recording… Ctrl+C to stop.\n")
 
     stop = asyncio.Event()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGINT,  lambda: stop.set())
     loop.add_signal_handler(signal.SIGTERM, lambda: stop.set())
 
@@ -485,6 +485,33 @@ async def main_async(args):
         await run_oneshot(args, mic_node, mic_desc, sinks, mon_desc)
 
 
+def _daemon_ctl(action: str, token: str, api: str) -> None:
+    """Send a start/stop/status command to a running daemon."""
+    import urllib.request, urllib.error
+    url = f"http://127.0.0.1:{DAEMON_PORT}/{action}"
+    try:
+        if action in ("start", "stop"):
+            data = json.dumps({"token": token, "api": api}).encode()
+            req  = urllib.request.Request(url, data=data, method="POST",
+                                          headers={"Content-Type": "application/json"})
+        else:
+            req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            body = json.loads(r.read())
+        if action == "status":
+            if body.get("recording"):
+                elapsed = int(body.get("elapsed_s", 0))
+                print(f"  Recording  {elapsed//60:02d}:{elapsed%60:02d}  "
+                      f"{body.get('size_mb', 0):.1f} MB  [{body.get('meeting_id','?')[:8]}]")
+            else:
+                print("  Idle (daemon running)")
+        else:
+            print("  OK")
+    except urllib.error.URLError:
+        print(f"  Daemon not running — start it with: capture.py --daemon")
+        sys.exit(1)
+
+
 def main():
     p = argparse.ArgumentParser(description="MeetBuddy audio capture — PipeWire")
     p.add_argument("--api",     default="http://localhost:8000")
@@ -493,7 +520,20 @@ def main():
     p.add_argument("--monitor", help="Override output sink node name")
     p.add_argument("--daemon",  action="store_true", help=f"Run as daemon on :{DAEMON_PORT}")
     p.add_argument("--list",    action="store_true", help="List devices and exit")
-    asyncio.run(main_async(p.parse_args()))
+    p.add_argument("--start",   action="store_true", help="Tell daemon to start recording")
+    p.add_argument("--stop",    action="store_true", help="Tell daemon to stop recording")
+    p.add_argument("--status",  action="store_true", help="Show daemon recording status")
+    args = p.parse_args()
+
+    if args.start or args.stop or args.status:
+        action = "start" if args.start else "stop" if args.stop else "status"
+        tok    = args.token or os.environ.get("MEETBUDDY_TOKEN", "")
+        if action == "start" and not tok:
+            print("Error: --token <jwt> required to start recording."); sys.exit(1)
+        _daemon_ctl(action, tok, args.api)
+        return
+
+    asyncio.run(main_async(args))
 
 if __name__ == "__main__":
     main()

@@ -44,6 +44,22 @@ async def task_db():
         await engine.dispose()
 
 
+def _mark_failed(meeting_id: str) -> None:
+    from models.meeting import Meeting
+
+    async def _run_async():
+        async with task_db() as db:
+            meeting = await db.get(Meeting, uuid.UUID(meeting_id))
+            if meeting:
+                meeting.status = "failed"
+                await db.commit()
+                logger.error("Meeting %s marked as failed after exhausting retries", meeting_id)
+    try:
+        asyncio.run(_run_async())
+    except Exception:
+        logger.exception("Could not mark meeting %s as failed", meeting_id)
+
+
 def process_meeting(meeting_id: str) -> None:
     """Entry point — kick off the full pipeline as a Celery chain."""
     pipeline = chain(
@@ -95,6 +111,8 @@ def transcribe_audio(self, meeting_id: str) -> None:
         _run(_run_async())
     except Exception as exc:
         logger.exception("transcribe_audio failed for %s", meeting_id)
+        if self.request.retries >= self.max_retries:
+            _mark_failed(meeting_id)
         raise self.retry(exc=exc, countdown=30)
 
 
@@ -137,6 +155,8 @@ def store_and_embed_chunks(self, meeting_id: str) -> None:
         _run(_run_async())
     except Exception as exc:
         logger.exception("store_and_embed_chunks failed for %s", meeting_id)
+        if self.request.retries >= self.max_retries:
+            _mark_failed(meeting_id)
         raise self.retry(exc=exc, countdown=30)
 
 
@@ -181,6 +201,8 @@ def extract_insights_task(self, meeting_id: str) -> None:
         _run(_run_async())
     except Exception as exc:
         logger.exception("extract_insights_task failed for %s", meeting_id)
+        if self.request.retries >= self.max_retries:
+            _mark_failed(meeting_id)
         raise self.retry(exc=exc, countdown=60)
 
 

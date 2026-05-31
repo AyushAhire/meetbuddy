@@ -37,7 +37,7 @@ sleep 1
   > "$LOG_DIR/api.log" 2>&1) &
 API_PID=$!
 
-(cd "$ROOT/apps/api" && uv run celery -A tasks.celery_app worker \
+(cd "$ROOT/apps/api" && PYTHONPATH="$ROOT/apps/api" uv run celery -A tasks.celery_app worker \
   --loglevel=info --concurrency=2 \
   > "$LOG_DIR/worker.log" 2>&1) &
 WORKER_PID=$!

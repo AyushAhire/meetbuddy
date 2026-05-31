@@ -84,7 +84,7 @@ export function MeetingsList({ accessToken }: Props) {
       <div className="rounded-md border border-border bg-card py-16 text-center animate-fade-in-up">
         <p className="text-sm font-medium text-foreground mb-1">No meetings yet</p>
         <p className="text-xs text-muted-foreground">
-          Install the browser extension to start capturing meetings.
+          Click <strong className="text-foreground/60">Record</strong> in the nav bar to capture your first meeting.
         </p>
       </div>
     );

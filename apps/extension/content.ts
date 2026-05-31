@@ -2,6 +2,52 @@ export const config = {
   matches: ["https://meet.google.com/*"],
 }
 
+// ── Mic capture ──────────────────────────────────────────────────────────────
+
+let micRecorder: MediaRecorder | null = null;
+let micStream: MediaStream | null = null;
+let micSeq = 0;
+
+async function startMic(micDeviceId?: string) {
+  try {
+    const constraints: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+    if (micDeviceId) constraints.deviceId = micDeviceId;
+
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: constraints, video: false });
+    micRecorder = new MediaRecorder(micStream, { mimeType: "audio/webm;codecs=opus" });
+    micRecorder.ondataavailable = (e) => {
+      if (e.data.size === 0) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const b64 = (reader.result as string).split(",")[1];
+        chrome.runtime.sendMessage({ type: "MIC_CHUNK", audio_b64: b64, seq: micSeq++ }).catch(() => {});
+      };
+      reader.readAsDataURL(e.data);
+    };
+    micRecorder.start(5_000);
+    chrome.runtime.sendMessage({ type: "MIC_STATUS", active: true }).catch(() => {});
+  } catch (e) {
+    chrome.runtime.sendMessage({ type: "MIC_STATUS", active: false, error: (e as Error).message }).catch(() => {});
+  }
+}
+
+function stopMic() {
+  micRecorder?.stop();
+  micStream?.getTracks().forEach((t) => t.stop());
+  micRecorder = null;
+  micStream = null;
+  micSeq = 0;
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "START_MIC") startMic(msg.micDeviceId);
+  if (msg.type === "STOP_MIC")  stopMic();
+});
+
 // ── Participant detection ────────────────────────────────────────────────────
 
 const PARTICIPANT_SELECTOR = "[data-participant-id]";

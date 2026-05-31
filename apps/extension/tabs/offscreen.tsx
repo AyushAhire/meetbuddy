@@ -1,7 +1,6 @@
 // Offscreen document: tab audio capture only.
-// getUserMedia with chromeMediaSource:"tab" only works reliably here
-// (same extension context as the background that called getMediaStreamId).
-// Mic is captured in the sidepanel where the permission was actually granted.
+// Mic is captured in content.ts (Google Meet tab context) — the only MV3
+// context where getUserMedia for the microphone works reliably.
 
 let mediaRecorder: MediaRecorder | null = null;
 let tabStream: MediaStream | null = null;
@@ -30,7 +29,6 @@ async function startCapture(streamId: string) {
     video: false,
   });
 
-  // Play back so the user can still hear the meeting.
   audioEl = document.createElement("audio");
   audioEl.srcObject = tabStream;
   await audioEl.play().catch(() => {});

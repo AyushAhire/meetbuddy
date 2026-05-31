@@ -62,7 +62,12 @@ async def _finalize_recording(meeting_id: uuid.UUID, streams: dict[str, list[byt
     )
 
     if not tab_data and not mic_data:
-        logger.warning("Meeting %s has no audio data — skipping pipeline", meeting_id)
+        logger.warning("Meeting %s has no audio data — marking as failed", meeting_id)
+        async with AsyncSessionFactory() as db:
+            meeting = await db.get(Meeting, meeting_id)
+            if meeting:
+                meeting.status = "failed"
+                await db.commit()
         return
 
     # Upload runs synchronously in a thread so it doesn't block the event loop.
