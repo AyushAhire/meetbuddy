@@ -149,15 +149,20 @@ def api_poll_status(base: str, token: str, meeting_id: str) -> str:
 
 # ─── pw-record coroutine ──────────────────────────────────────────────────────
 
-async def record_node(node: str, q: asyncio.Queue, stop: asyncio.Event) -> None:
+async def record_node(node: str, q: asyncio.Queue, stop: asyncio.Event,
+                      is_monitor: bool = False) -> None:
     """
     Capture from a PipeWire node into q.
-    Targeting a SINK node directly causes PipeWire to connect to its monitor
-    ports — no '.monitor' suffix needed (and the suffix is wrong in PipeWire).
+    is_monitor=True sets stream.capture.sink=true so WirePlumber wires this
+    capture stream to the sink's monitor ports. Without this, BT sinks (HFP and
+    A2DP) silently produce no audio even though their monitor ports exist.
     """
+    cmd = ["pw-record", "--target", node]
+    if is_monitor:
+        cmd += ["-P", "stream.capture.sink=true"]
+    cmd += ["--format", "s16", "--rate", str(RATE), "--channels", str(CHANNELS), "-"]
     proc = await asyncio.create_subprocess_exec(
-        "pw-record", "--target", node,
-        "--format", "s16", "--rate", str(RATE), "--channels", str(CHANNELS), "-",
+        *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
@@ -194,7 +199,7 @@ async def do_record(
         if name in mon_qs: return
         q = asyncio.Queue(maxsize=50)
         mon_qs[name] = q
-        mon_ts[name] = asyncio.create_task(record_node(name, q, stop))
+        mon_ts[name] = asyncio.create_task(record_node(name, q, stop, is_monitor=True))
 
     for s in initial_sinks:
         await _add_sink(s)
@@ -372,15 +377,15 @@ async def _http(reader, writer):
     await writer.drain(); writer.close()
 
 
-async def _daemon_loop(mic_node, sinks, mic_desc, mon_desc):
+async def _daemon_loop(initial_mic, initial_sinks, initial_mic_desc, initial_mon_desc):
     global _sq
     _sq = asyncio.Queue()
-    _ds.mic_desc = mic_desc
-    _ds.mon_desc = mon_desc
+    _ds.mic_desc = initial_mic_desc
+    _ds.mon_desc = initial_mon_desc
 
     print(f"  Daemon ready → http://localhost:{DAEMON_PORT}")
-    print(f"  Mic     : {mic_desc}")
-    print(f"  Monitor : {mon_desc}")
+    print(f"  Mic     : {initial_mic_desc}")
+    print(f"  Monitor : {initial_mon_desc}")
     print(f"  Open http://localhost:3000 and click Record.\n")
 
     while True:
@@ -388,13 +393,23 @@ async def _daemon_loop(mic_node, sinks, mic_desc, mon_desc):
         stop = asyncio.Event()
         _ds._stop = stop
 
+        # Re-detect devices at recording start so BT switches are picked up.
+        try:
+            import argparse as _ap
+            _args = _ap.Namespace(mic=None, monitor=None)
+            mic_node, mic_desc, sinks, mon_desc = resolve_devices(_args)
+        except SystemExit:
+            mic_node, mic_desc, sinks, mon_desc = initial_mic, initial_mic_desc, initial_sinks, initial_mon_desc
+        _ds.mic_desc = mic_desc
+        _ds.mon_desc = mon_desc
+
         try: meeting_id = api_create_meeting(api_url, token)
         except Exception as e:
             print(f"  Could not create meeting: {e}"); continue
 
         _ds.recording = True; _ds.meeting_id = meeting_id
         _ds.elapsed_s = 0;    _ds.size_mb = 0
-        print(f"  ● Recording — {meeting_id}")
+        print(f"  ● Recording — {meeting_id}  mic={mic_desc}  monitor={mon_desc}")
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             wav_path = Path(tmp.name)
