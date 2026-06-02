@@ -1,23 +1,32 @@
 # MeetBuddy
 
-> Privacy-first AI meeting intelligence — no bots, no cloud lock-in, runs entirely on your machine.
+**AI meeting notes that never send a bot into your call and never upload your audio to a stranger's server.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org)
 [![Node](https://img.shields.io/badge/node-20-green)](https://nodejs.org)
 
-MeetBuddy records your meetings, transcribes the audio, extracts summaries and action items, and lets you search across your full meeting history — all running locally. No bots join your call. No third-party server sees your audio.
+---
 
-**Your meeting data never leaves your machine unless you choose a Cloud LLM.**
+## The problem
+
+Every meeting assistant today works the same way: a bot joins your call as a participant, your audio streams to their cloud, and you hope they handle it responsibly. That model is a non-starter for sales calls, legal discussions, medical conversations, or any company with a security policy.
+
+## What MeetBuddy does
+
+MeetBuddy captures audio at the OS level (via PipeWire on Linux) or through a Chrome extension — no bot, no third-party server, nothing visible to other participants. It transcribes with [faster-whisper](https://github.com/guillaumekynast/faster-whisper) locally, extracts summaries and action items with an LLM of your choice (Ollama, Anthropic, or OpenAI), and indexes everything in a local Postgres database with vector search so you can find anything you've ever discussed.
+
+**Your audio never leaves your machine unless you explicitly configure a cloud LLM.**
+
+Works with Google Meet, Zoom, Teams, or any app that uses your speakers — because it captures at the audio driver level, not the application level.
 
 ---
 
 ## How it works
 
-Two ways to capture audio — use whichever fits your setup:
-
 ### Option A — Desktop tray app (recommended)
-Uses PipeWire to capture your microphone and all speaker output at the OS level. Works with any meeting platform (Google Meet, Zoom, Teams, etc.).
+
+Uses PipeWire to capture both your mic and speaker output at the OS level. Works with any meeting platform.
 
 ```
 PipeWire
@@ -34,7 +43,8 @@ PipeWire
 ```
 
 ### Option B — Chrome extension
-Captures tab audio via `chrome.tabCapture` and your mic via `getUserMedia` in the Google Meet content script. Streams chunks over WebSocket in real time.
+
+Captures tab audio via `chrome.tabCapture` and your mic via `getUserMedia` inside the Google Meet tab. Streams chunks over WebSocket in real time. No bot joins the call.
 
 ```
 Google Meet tab
@@ -47,7 +57,7 @@ Google Meet tab
         └─ Celery pipeline
 ```
 
-Both paths feed the same backend pipeline:
+Both paths feed the same backend:
 
 ```
 Celery chain
@@ -57,26 +67,26 @@ Celery chain
          └─► summary + action items
                     │
                     ▼
-     Next.js dashboard  (browse, search, insights)
+     Next.js dashboard  (browse, search, query)
 ```
 
 ---
 
 ## Features
 
-- **Zero-bot capture** — audio is grabbed at the OS or browser level; no bot appears on the call
-- **Any platform** — tray app works with Google Meet, Zoom, Teams, or any app that uses your speakers
-- **Native desktop app** — system tray icon with a built-in pywebview window; start/stop recording with one click
-- **Both audio tracks** — mic and speaker output captured and mixed separately for better transcription
-- **Fully local by default** — faster-whisper + Ollama means nothing leaves your machine
-- **Semantic search** — find anything across your full meeting history via pgvector
-- **LLM-agnostic** — switch between Ollama, Anthropic, and OpenAI with a single env var
-- **Auto action items** — extracted by the LLM after each meeting completes
-- **Browser fallback** — `BrowserRecorder` in the web dashboard uses `getDisplayMedia` if neither option above is available
+- **No bot** — audio is grabbed at the OS or browser level; nothing joins your call
+- **Any platform** — tray app works with Google Meet, Zoom, Teams, or anything that uses your speakers
+- **Fully local by default** — faster-whisper + Ollama; nothing leaves your machine
+- **Separate audio tracks** — mic and speaker captured independently for better transcription accuracy
+- **Semantic search** — find any moment across your full meeting history via pgvector
+- **LLM-agnostic** — switch between Ollama, Anthropic, and OpenAI with one env var
+- **Native desktop app** — system tray icon with one-click start/stop
 
 ---
 
-## Prerequisites
+## Quick start
+
+### Prerequisites
 
 | Tool | Version | Purpose |
 |---|---|---|
@@ -87,16 +97,6 @@ Celery chain
 | PipeWire | any | Audio capture on Linux (usually pre-installed) |
 | Chrome | any | Extension (Option B only) |
 | Ollama | latest | Optional — fully local LLM |
-
-Python deps for the tray app:
-```bash
-pip install pystray pillow pywebview
-# httpx is already installed via apps/api requirements
-```
-
----
-
-## Quick start
 
 ```bash
 # 1. Clone and configure
@@ -113,17 +113,15 @@ cd apps/web && pnpm dev
 # 4. Open http://localhost:3000, register an account, copy your token
 ```
 
-### Option A — Desktop tray app (recommended)
+### Option A — Desktop tray app
 
 ```bash
-# Install tray deps once
 pip install pystray pillow pywebview
 
-# Launch (persists in system tray)
 DISPLAY=:0 PYSTRAY_BACKEND=xorg python3 apps/tray/tray.py
 ```
 
-Left-click the tray icon to open the app window. First launch: open **Settings** and paste your token from the dashboard.
+Left-click the tray icon to open the app window. Open **Settings** and paste your token from the dashboard.
 
 You can also run the capture daemon directly and control it from the web UI:
 
@@ -141,7 +139,6 @@ python3 apps/capture/capture.py --token <jwt>
 ### Option B — Chrome extension
 
 ```bash
-# Build the extension
 cd apps/extension && pnpm dev
 ```
 
@@ -167,8 +164,6 @@ python3 apps/capture/capture.py --mic <node-name> --monitor <node-name>
 ---
 
 ## Environment variables
-
-Key vars in `.env` (full list in `.env.example`):
 
 | Variable | Default | Description |
 |---|---|---|
@@ -209,8 +204,6 @@ meetbuddy/
 │   ├── tray/
 │   │   ├── tray.py                 # System tray app (pystray + pywebview)
 │   │   └── requirements.txt        # pystray, pillow, pywebview
-│   ├── mic-test/
-│   │   └── index.html              # Browser-based mic diagnostic tool
 │   ├── web/                        # Next.js 14 App Router dashboard
 │   │   └── app/
 │   │       ├── meetings/           # Meeting list + detail view
@@ -237,7 +230,7 @@ meetbuddy/
 |---|---|
 | Tray app | pystray, pywebview (GTK/WebKit), Pillow |
 | Capture | PipeWire (`pw-record`), Python asyncio |
-| Extension | Plasmo (Chrome MV3), TypeScript, WebSocket, Web Audio API |
+| Extension | Plasmo (Chrome MV3), TypeScript, WebSocket |
 | API | FastAPI, SQLAlchemy 2.0 async, Alembic, Celery |
 | AI | faster-whisper, sentence-transformers, LangChain |
 | DB | PostgreSQL 16 + pgvector, Redis |
