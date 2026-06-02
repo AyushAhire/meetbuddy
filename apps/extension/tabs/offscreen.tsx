@@ -4,8 +4,6 @@
 
 let mediaRecorder: MediaRecorder | null = null;
 let tabStream: MediaStream | null = null;
-let audioCtx: AudioContext | null = null;
-let audioEl: HTMLAudioElement | null = null;
 let seq = 0;
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -29,17 +27,7 @@ async function startCapture(streamId: string) {
     video: false,
   });
 
-  audioEl = document.createElement("audio");
-  audioEl.srcObject = tabStream;
-  await audioEl.play().catch(() => {});
-
-  const ctx = new AudioContext();
-  await ctx.resume();
-  audioCtx = ctx;
-  const dest = ctx.createMediaStreamDestination();
-  ctx.createMediaStreamSource(tabStream).connect(dest);
-
-  mediaRecorder = new MediaRecorder(dest.stream, { mimeType: "audio/webm;codecs=opus" });
+  mediaRecorder = new MediaRecorder(tabStream, { mimeType: "audio/webm;codecs=opus" });
   mediaRecorder.ondataavailable = (e) => {
     if (e.data.size === 0) return;
     const reader = new FileReader();
@@ -55,12 +43,8 @@ async function startCapture(streamId: string) {
 function stopCapture() {
   mediaRecorder?.stop();
   tabStream?.getTracks().forEach((t) => t.stop());
-  audioCtx?.close();
-  if (audioEl) { audioEl.pause(); audioEl.srcObject = null; }
   mediaRecorder = null;
   tabStream = null;
-  audioCtx = null;
-  audioEl = null;
   seq = 0;
 }
 
