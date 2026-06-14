@@ -32,7 +32,7 @@ DAEMON_PORT   = 7779
 RATE          = 16_000
 CHANNELS      = 1
 WIDTH         = 2           # s16le
-SIZE_LIMIT_MB = 23          # stop before Groq's 25 MB limit
+SIZE_LIMIT_MB = 28          # ~15 min of 16 kHz mono WAV; API compresses to FLAC before Groq
 BT_RESCAN_S   = 5           # re-scan for new BT sinks every N seconds
 
 

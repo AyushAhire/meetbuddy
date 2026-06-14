@@ -39,30 +39,77 @@ def _run_local_whisper(path: str) -> list[dict]:
 
 # ── Groq Whisper (OpenAI-compatible API) ─────────────────────────────────────
 
+_GROQ_LIMIT_MB = 24  # Groq rejects files over 25 MB; stay under with headroom
+
+
+def _to_flac(audio_bytes: bytes) -> bytes:
+    """Losslessly transcode PCM/WAV audio to FLAC in-memory via PyAV.
+
+    Raw 16 kHz mono WAV is ~1.8 MB/min, so a 15-minute recording is ~27 MB —
+    over Groq's limit. FLAC compresses speech to well under half that without
+    quality loss, letting longer recordings through.
+    """
+    import io
+    import av
+
+    in_buf, out_buf = io.BytesIO(audio_bytes), io.BytesIO()
+    with av.open(in_buf, mode="r") as in_c, av.open(out_buf, mode="w", format="flac") as out_c:
+        in_stream = in_c.streams.audio[0]
+        out_stream = out_c.add_stream("flac", rate=in_stream.rate)
+        out_stream.layout = in_stream.layout
+        for frame in in_c.decode(in_stream):
+            frame.pts = None
+            for pkt in out_stream.encode(frame):
+                out_c.mux(pkt)
+        for pkt in out_stream.encode(None):
+            out_c.mux(pkt)
+    return out_buf.getvalue()
+
+
 async def _transcribe_with_groq(audio_bytes: bytes, suffix: str) -> list[dict]:
     """Send audio to Groq's Whisper API and return segment dicts."""
+    import logging
+
     from openai import AsyncOpenAI
 
+    logger = logging.getLogger(__name__)
     client = AsyncOpenAI(
         api_key=settings.groq_api_key,
         base_url="https://api.groq.com/openai/v1",
     )
 
-    # Groq has a 25 MB file size limit
+    # Groq has a 25 MB file size limit. Uncompressed WAV blows past it around
+    # ~13 min, so compress oversized PCM to FLAC before uploading.
     size_mb = len(audio_bytes) / (1024 * 1024)
-    if size_mb > 24:
-        raise ValueError(f"Audio file is {size_mb:.1f} MB — exceeds Groq's 25 MB limit. "
-                         "Split the recording or use a local model.")
+    if size_mb > _GROQ_LIMIT_MB:
+        try:
+            flac_bytes = await asyncio.to_thread(_to_flac, audio_bytes)
+        except Exception as exc:
+            raise ValueError(
+                f"Audio file is {size_mb:.1f} MB — exceeds Groq's 25 MB limit and "
+                f"could not be compressed ({exc})."
+            ) from exc
+        flac_mb = len(flac_bytes) / (1024 * 1024)
+        logger.info("Compressed audio %.1f MB WAV → %.1f MB FLAC for Groq", size_mb, flac_mb)
+        if flac_mb > _GROQ_LIMIT_MB:
+            raise ValueError(
+                f"Audio is {flac_mb:.1f} MB even after FLAC compression — exceeds "
+                "Groq's 25 MB limit. Split the recording or use a local model."
+            )
+        audio_bytes, suffix = flac_bytes, ".flac"
 
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
 
+    mime = {".flac": "audio/flac", ".wav": "audio/wav", ".mp3": "audio/mpeg"}.get(
+        suffix.lower(), "audio/webm"
+    )
     try:
         with open(tmp_path, "rb") as f:
             response = await client.audio.transcriptions.create(
                 model=settings.groq_whisper_model,
-                file=(Path(tmp_path).name, f, "audio/webm"),
+                file=(Path(tmp_path).name, f, mime),
                 response_format="verbose_json",
                 timestamp_granularities=["segment"],
             )
