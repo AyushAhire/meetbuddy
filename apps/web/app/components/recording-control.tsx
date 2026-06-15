@@ -19,7 +19,7 @@ function fmt(secs: number) {
   return `${m}:${s}`;
 }
 
-export function RecordingControl({ token }: { token: string }) {
+export function RecordingControl({ token = "local" }: { token?: string }) {
   const [status, setStatus] = useState<DaemonStatus | null>(null);
   const [daemonUp, setDaemonUp] = useState(false);
   const [busy, setBusy] = useState(false);

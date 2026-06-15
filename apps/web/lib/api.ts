@@ -1,21 +1,16 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Local desktop build: the dashboard is served from the same origin as the
+// API, so calls are same-origin and need no token (single-user local mode).
+// NEXT_PUBLIC_API_URL can still point elsewhere for dev.
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 const API = `${BASE}/api/v1`;
 
-interface FetchOptions extends RequestInit {
-  token?: string;
-}
-
-async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
-  const { token, ...rest } = opts;
+async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(rest.headers as Record<string, string>),
+    ...(opts.headers as Record<string, string>),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
-  const res = await fetch(`${API}${path}`, { ...rest, headers });
+  const res = await fetch(`${API}${path}`, { ...opts, headers });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(error.detail ?? "API error");
@@ -89,48 +84,27 @@ export interface QuerySource {
   start_time: number;
 }
 
-export const authApi = {
-  register: (email: string, password: string, name?: string) =>
-    apiFetch<TokenResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password, name }),
-    }),
-
-  login: (email: string, password: string) =>
-    apiFetch<TokenResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-
-  refresh: (refreshToken: string) =>
-    apiFetch<TokenResponse>("/auth/refresh", {
-      method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    }),
-};
-
 export const meetingsApi = {
-  list: (token: string, status?: string) =>
-    apiFetch<Meeting[]>(`/meetings${status ? `?status=${status}` : ""}`, { token }),
+  list: (status?: string) =>
+    apiFetch<Meeting[]>(`/meetings${status ? `?status=${status}` : ""}`),
 
-  get: (token: string, id: string) =>
-    apiFetch<Meeting>(`/meetings/${id}`, { token }),
+  get: (id: string) =>
+    apiFetch<Meeting>(`/meetings/${id}`),
 
-  transcript: (token: string, id: string) =>
-    apiFetch<TranscriptChunk[]>(`/meetings/${id}/transcript`, { token }),
+  transcript: (id: string) =>
+    apiFetch<TranscriptChunk[]>(`/meetings/${id}/transcript`),
 
-  audioUrl: (token: string, id: string) =>
-    apiFetch<{ url: string }>(`/meetings/${id}/audio`, { token }),
+  audioUrl: (id: string) =>
+    apiFetch<{ url: string }>(`/meetings/${id}/audio`),
 
-  delete: (token: string, id: string) =>
-    apiFetch<void>(`/meetings/${id}`, { method: "DELETE", token }),
+  delete: (id: string) =>
+    apiFetch<void>(`/meetings/${id}`, { method: "DELETE" }),
 };
 
 export const queryApi = {
-  ask: (token: string, q: string, meetingIds: string[] = []) =>
+  ask: (q: string, meetingIds: string[] = []) =>
     apiFetch<QueryResponse>("/query", {
       method: "POST",
-      token,
       body: JSON.stringify({ q, meeting_ids: meetingIds }),
     }),
 };

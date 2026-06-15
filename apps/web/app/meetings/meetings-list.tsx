@@ -8,8 +8,6 @@ import { format } from "date-fns";
 import { Calendar, Clock, CheckSquare, Trash2, CheckCheck } from "lucide-react";
 import Link from "next/link";
 
-interface Props { accessToken: string }
-
 const STATUS: Record<string, { color: string; label: string; pulse?: boolean }> = {
   done:       { color: "#22c55e", label: "Done" },
   processing: { color: "#f59e0b", label: "Processing", pulse: true },
@@ -17,14 +15,14 @@ const STATUS: Record<string, { color: string; label: string; pulse?: boolean }> 
   failed:     { color: "#ef4444", label: "Failed" },
 };
 
-export function MeetingsList({ accessToken }: Props) {
+export function MeetingsList() {
   const queryClient = useQueryClient();
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: meetings, isLoading, error, refetch } = useQuery({
     queryKey: ["meetings"],
-    queryFn: () => meetingsApi.list(accessToken),
+    queryFn: () => meetingsApi.list(),
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
@@ -36,7 +34,7 @@ export function MeetingsList({ accessToken }: Props) {
   }, [refetch]);
 
   const deleteMutation = useMutation({
-    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => meetingsApi.delete(accessToken, id))),
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => meetingsApi.delete(id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setSelected(new Set());
@@ -217,7 +215,7 @@ function MeetingRow({
     return <div onClick={onToggle} className="cursor-pointer block">{inner}</div>;
   }
   return (
-    <Link href={`/meetings/${meeting.id}`} className="block">
+    <Link href={`/meetings/detail/?id=${meeting.id}`} className="block">
       {inner}
     </Link>
   );

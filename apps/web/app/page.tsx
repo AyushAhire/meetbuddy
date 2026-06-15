@@ -1,7 +1,12 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+"use client";
 
-export default async function Home() {
-  const session = await auth();
-  redirect(session ? "/meetings" : "/login");
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function Home() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/meetings");
+  }, [router]);
+  return null;
 }

@@ -6,6 +6,7 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from database import get_db
 from models.user import User
 from schemas.auth import LoginRequest, RegisterRequest, TokenResponse
@@ -17,7 +18,18 @@ from utils.auth import (
     verify_password,
 )
 
-bearer_scheme = HTTPBearer()
+# auto_error=False so single-user mode works with no Authorization header.
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def get_or_create_local_user(db: AsyncSession) -> User:
+    """Return the singleton local profile, creating it on first use."""
+    user = await db.scalar(select(User).where(User.email == settings.local_user_email))
+    if user is None:
+        user = User(email=settings.local_user_email, name="Local")
+        db.add(user)
+        await db.flush()
+    return user
 
 
 async def register_user(req: RegisterRequest, db: AsyncSession) -> TokenResponse:
@@ -70,9 +82,15 @@ async def refresh_tokens(refresh_token: str, db: AsyncSession) -> TokenResponse:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    # Local desktop build: no login — every request is the local profile.
+    if settings.single_user_mode:
+        return await get_or_create_local_user(db)
+
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
         payload = decode_token(credentials.credentials)
         if payload.get("type") != "access":

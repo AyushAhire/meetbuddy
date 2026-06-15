@@ -56,7 +56,7 @@ async def complete_upload(
     meeting.status = "processing"
     await db.commit()
 
-    from tasks.pipeline import process_meeting
-    process_meeting(str(req.meeting_id))
+    from tasks.worker import enqueue
+    enqueue(str(req.meeting_id))
 
     return {"status": "processing", "meeting_id": str(req.meeting_id)}

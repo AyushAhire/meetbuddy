@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { CheckSquare, MessageSquare, Lightbulb, Clock } from "lucide-react";
 import { useState } from "react";
 
-interface Props { meeting: Meeting; accessToken: string }
+interface Props { meeting: Meeting }
 
 const STATUS: Record<string, { color: string; label: string }> = {
   done:       { color: "#22c55e", label: "Done" },
@@ -16,18 +16,18 @@ const STATUS: Record<string, { color: string; label: string }> = {
   failed:     { color: "#ef4444", label: "Failed" },
 };
 
-export function MeetingDetail({ meeting, accessToken }: Props) {
+export function MeetingDetail({ meeting }: Props) {
   const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
 
   const { data: transcript } = useQuery({
     queryKey: ["transcript", meeting.id],
-    queryFn: () => meetingsApi.transcript(accessToken, meeting.id),
+    queryFn: () => meetingsApi.transcript(meeting.id),
     enabled: activeTab === "transcript",
   });
 
   const { data: audioData } = useQuery({
     queryKey: ["audio", meeting.id],
-    queryFn: () => meetingsApi.audioUrl(accessToken, meeting.id),
+    queryFn: () => meetingsApi.audioUrl(meeting.id),
     enabled: !!meeting.audio_url,
     retry: false,
   });

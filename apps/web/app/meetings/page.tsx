@@ -1,16 +1,10 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+"use client";
+
 import { MeetingsList } from "./meetings-list";
-import { CopyTokenButton } from "./copy-token-button";
-import { BrowserRecorder } from "@/app/components/browser-recorder";
+import { RecordingControl } from "@/app/components/recording-control";
 import { Logo } from "@/app/components/logo";
 
-export default async function MeetingsPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
-  const accessToken = (session as unknown as Record<string, unknown>).accessToken as string;
-
+export default function MeetingsPage() {
   return (
     <div className="min-h-screen">
       <header className="app-nav px-5 h-12 flex items-center gap-4">
@@ -21,9 +15,7 @@ export default async function MeetingsPage() {
         <a href="/query" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
           Ask AI
         </a>
-        <BrowserRecorder token={accessToken} />
-        <CopyTokenButton token={accessToken} />
-        <span className="text-xs text-muted-foreground hidden sm:block">{session.user?.email}</span>
+        <RecordingControl />
       </header>
 
       <main className="max-w-4xl mx-auto px-5 py-8 pb-16">
@@ -33,7 +25,7 @@ export default async function MeetingsPage() {
             AI-generated summaries and action items from your calls
           </p>
         </div>
-        <MeetingsList accessToken={accessToken} />
+        <MeetingsList />
       </main>
     </div>
   );

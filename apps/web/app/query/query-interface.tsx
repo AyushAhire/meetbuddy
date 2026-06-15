@@ -6,15 +6,13 @@ import { formatTime } from "@/lib/utils";
 import { Search, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
-interface Props { accessToken: string }
-
 const EXAMPLES = [
   "What action items were assigned last week?",
   "What did we decide about pricing?",
   "Summarize the team's blockers",
 ];
 
-export function QueryInterface({ accessToken }: Props) {
+export function QueryInterface() {
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +25,7 @@ export function QueryInterface({ accessToken }: Props) {
     setError(null);
     setResult(null);
     try {
-      setResult(await queryApi.ask(accessToken, question));
+      setResult(await queryApi.ask(question));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Query failed");
     } finally {
@@ -104,7 +102,7 @@ export function QueryInterface({ accessToken }: Props) {
                         {formatTime(src.start_time)}
                       </span>
                       <Link
-                        href={`/meetings/${src.meeting_id}`}
+                        href={`/meetings/detail/?id=${src.meeting_id}`}
                         className="text-[11px] text-primary hover:underline underline-offset-2 flex items-center gap-1"
                       >
                         View <ExternalLink className="w-2.5 h-2.5" />

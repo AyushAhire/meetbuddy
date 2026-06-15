@@ -86,8 +86,8 @@ async def _finalize_recording(meeting_id: uuid.UUID, streams: dict[str, list[byt
             await db.commit()
 
     try:
-        from tasks.pipeline import process_meeting
-        await asyncio.to_thread(process_meeting, str(meeting_id))
+        from tasks.worker import enqueue
+        enqueue(str(meeting_id))
         logger.info("Queued pipeline for meeting %s", meeting_id)
     except Exception:
-        logger.exception("Failed to queue Celery pipeline for meeting %s", meeting_id)
+        logger.exception("Failed to queue pipeline for meeting %s", meeting_id)
